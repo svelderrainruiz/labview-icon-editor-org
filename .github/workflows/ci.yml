@@ -968,7 +968,7 @@ jobs:
           if (-not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
             throw "runner-cli project not found at $runnerCliProject"
           }
-          & dotnet build $runnerCliProject --configuration Release -nologo /p:UseAppHost=false
+          & dotnet build $runnerCliProject --configuration Release -nologo /p:SelfContained=false /p:UseAppHost=false
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
@@ -1022,7 +1022,7 @@ jobs:
           if (-not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
             throw "runner-cli project not found at $runnerCliProject"
           }
-          & dotnet build $runnerCliProject --configuration Release -nologo /p:UseAppHost=false
+          & dotnet build $runnerCliProject --configuration Release -nologo /p:SelfContained=false /p:UseAppHost=false
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
@@ -1068,7 +1068,7 @@ jobs:
           if (-not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
             throw "runner-cli project not found at $runnerCliProject"
           }
-          & dotnet build $runnerCliProject --configuration Release -nologo /p:UseAppHost=false
+          & dotnet build $runnerCliProject --configuration Release -nologo /p:SelfContained=false /p:UseAppHost=false
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
@@ -1157,7 +1157,7 @@ jobs:
           if (-not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
             throw "runner-cli project not found at $runnerCliProject"
           }
-          & dotnet build $runnerCliProject --configuration Release -nologo /p:UseAppHost=false
+          & dotnet build $runnerCliProject --configuration Release -nologo /p:SelfContained=false /p:UseAppHost=false
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
@@ -1384,7 +1384,7 @@ jobs:
           if (-not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
             throw "runner-cli project not found at $runnerCliProject"
           }
-          & dotnet build $runnerCliProject --configuration Release -nologo /p:UseAppHost=false
+          & dotnet build $runnerCliProject --configuration Release -nologo /p:SelfContained=false /p:UseAppHost=false
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
@@ -1438,7 +1438,7 @@ jobs:
           if (-not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
             throw "runner-cli project not found at $runnerCliProject"
           }
-          & dotnet build $runnerCliProject --configuration Release -nologo /p:UseAppHost=false
+          & dotnet build $runnerCliProject --configuration Release -nologo /p:SelfContained=false /p:UseAppHost=false
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
@@ -1484,7 +1484,7 @@ jobs:
           if (-not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
             throw "runner-cli project not found at $runnerCliProject"
           }
-          & dotnet build $runnerCliProject --configuration Release -nologo /p:UseAppHost=false
+          & dotnet build $runnerCliProject --configuration Release -nologo /p:SelfContained=false /p:UseAppHost=false
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
@@ -1573,7 +1573,7 @@ jobs:
           if (-not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
             throw "runner-cli project not found at $runnerCliProject"
           }
-          & dotnet build $runnerCliProject --configuration Release -nologo /p:UseAppHost=false
+          & dotnet build $runnerCliProject --configuration Release -nologo /p:SelfContained=false /p:UseAppHost=false
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
@@ -4044,3 +4044,4 @@ jobs:
           }
 
           Write-Host 'CI required context passed.'
+
