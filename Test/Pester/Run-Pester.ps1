@@ -87,7 +87,8 @@ $configuration = New-PesterConfiguration
 $additionalContractTests = @(
     (Join-Path $repoRoot 'Test\BuildVipLockContract.Tests.ps1'),
     (Join-Path $repoRoot 'Test\VipbBuildLock.Tests.ps1'),
-    (Join-Path $repoRoot 'Test\VipmPortAlignment.Tests.ps1')
+    (Join-Path $repoRoot 'Test\VipmPortAlignment.Tests.ps1'),
+    (Join-Path $repoRoot 'Test\VipcRemediationSummaryContract.Tests.ps1')
 ) | Where-Object { Test-Path -Path $_ }
 $configuration.Run.Path = @($PSScriptRoot) + $additionalContractTests
 $configuration.Run.PassThru = $true
