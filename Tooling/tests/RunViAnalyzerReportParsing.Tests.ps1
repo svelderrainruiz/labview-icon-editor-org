@@ -39,6 +39,8 @@ Describe 'Run-ViAnalyzer report parsing contract' {
                 (Get-FunctionDefinitionText -Ast $ast -FunctionName 'Get-ViAnalyzerFailureItemList')
                 ''
                 (Get-FunctionDefinitionText -Ast $ast -FunctionName 'Get-OrderedUniqueFilePathList')
+                ''
+                (Get-FunctionDefinitionText -Ast $ast -FunctionName 'Test-ViAnalyzerMissingInstallSignature')
             ) -Encoding utf8
 
         . $harnessPath
@@ -80,5 +82,24 @@ Describe 'Run-ViAnalyzer report parsing contract' {
             'C:\actions-runner\_work\Tooling\Unset Run Icon Editor from Source.vi',
             'C:\actions-runner\_work\Tooling\Mass Compile Runner.vi'
         )
+    }
+
+    It 'detects the known VI Analyzer missing-install signature from LabVIEWCLI output' {
+        $lines = @(
+            'Error code : -350053',
+            'Error message : LabVIEW CLI: (Hex 0xFFFAA89B) The CLI for LabVIEW failed to run the operation due to missing or bad files.'
+        )
+
+        (Test-ViAnalyzerMissingInstallSignature -Lines $lines) | Should -BeTrue
+    }
+
+    It 'does not flag install-missing signature for normal success output' {
+        $lines = @(
+            '10 tests passed.',
+            '0 tests failed.',
+            '0 tests skipped.'
+        )
+
+        (Test-ViAnalyzerMissingInstallSignature -Lines $lines) | Should -BeFalse
     }
 }

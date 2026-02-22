@@ -128,6 +128,23 @@ function Get-LabVIEWCliSummaryCount {
     }
 }
 
+function Test-ViAnalyzerMissingInstallSignature {
+    param([string[]]$Lines)
+
+    if (-not $Lines -or $Lines.Count -eq 0) {
+        return $false
+    }
+
+    $text = $Lines -join [Environment]::NewLine
+    if ([string]::IsNullOrWhiteSpace($text)) {
+        return $false
+    }
+
+    $hasMissingOperationCode = $text -match '(?im)Error\s+code\s*:\s*-350053\b'
+    $hasMissingOperationMessage = $text -match '(?im)failed\s+to\s+run\s+the\s+operation\s+due\s+to\s+missing\s+or\s+bad\s+files'
+    return ($hasMissingOperationCode -and $hasMissingOperationMessage)
+}
+
 function Get-ViAnalyzerReportCount {
     param(
         [AllowNull()]
@@ -289,6 +306,8 @@ function Add-ViAnalyzerSummary {
         [string]$SummaryPath,
         [object[]]$TaskResults,
         [bool]$OverallSuccess,
+        [bool]$InstallationGuardTriggered,
+        [string]$InstallationGuardMessage,
         [string]$ReportsRoot,
         [string]$StatusPath
     )
@@ -301,6 +320,10 @@ function Add-ViAnalyzerSummary {
     $lines += '### VI Analyzer (LabVIEWCLI)'
     $lines += ''
     $lines += ("- Overall result: **{0}**" -f $(if ($OverallSuccess) { 'pass' } else { 'fail' }))
+    $lines += ("- VI Analyzer installation guard: **{0}**" -f $(if ($InstallationGuardTriggered) { 'failed' } else { 'passed' }))
+    if ($InstallationGuardTriggered -and -not [string]::IsNullOrWhiteSpace($InstallationGuardMessage)) {
+        $lines += ("- Guard message: {0}" -f $InstallationGuardMessage)
+    }
     $lines += ('- Reports root: `{0}`' -f $ReportsRoot)
     $lines += ('- Status file: `{0}`' -f $StatusPath)
     $lines += ''
@@ -416,6 +439,8 @@ Write-Host ("Running VI Analyzer tasks from: {0}" -f $tasksPathResolved)
 
 $taskResults = New-Object 'System.Collections.Generic.List[object]'
 $overallSuccess = $true
+$installationGuardTriggered = $false
+$installationGuardMessage = ''
 
 foreach ($task in $tasks) {
     $taskId = [string]$task.id
@@ -463,6 +488,7 @@ foreach ($task in $tasks) {
         }
     }
     $durationMs = [int][Math]::Round(((Get-Date) - $start).TotalMilliseconds)
+    $missingInstallDetected = Test-ViAnalyzerMissingInstallSignature -Lines $outputLines
 
     $cliCounts = Get-LabVIEWCliSummaryCount -Lines $outputLines
     $reportText = Get-ViAnalyzerReportText -ReportPath $reportPath
@@ -477,6 +503,11 @@ foreach ($task in $tasks) {
     }
     if ($exitCode -ne 0) {
         $failureReasons.Add(("Non-zero exit code: {0}" -f $exitCode)) | Out-Null
+    }
+    if ($missingInstallDetected) {
+        $installationGuardTriggered = $true
+        $installationGuardMessage = ("LabVIEW CLI RunVIAnalyzer operation is unavailable for LabVIEW {0} {1}-bit. Ensure VI Analyzer is installed for this LabVIEW target." -f $resolvedLabVIEWYear, $SupportedBitness)
+        $failureReasons.Add($installationGuardMessage) | Out-Null
     }
     foreach ($requiredKey in @('passed', 'failed', 'skipped', 'vi_unloadable', 'test_unloadable', 'test_unrunnable', 'test_error', 'analyzed_total')) {
         if ($null -eq $counts[$requiredKey]) {
@@ -530,6 +561,11 @@ foreach ($task in $tasks) {
             failure_items   = @($failureItems)
             failure_file_paths = @($failureFilePaths)
         }) | Out-Null
+
+    if ($installationGuardTriggered) {
+        Write-Warning $installationGuardMessage
+        break
+    }
 }
 
 $status = [ordered]@{
@@ -554,6 +590,11 @@ $status = [ordered]@{
         remediation_enabled = [bool]$portResolution.RemediationEnabled
         remediation_applied = [bool]$portResolution.RemediationApplied
     }
+    installation_guard = [ordered]@{
+        passed    = (-not $installationGuardTriggered)
+        triggered = $installationGuardTriggered
+        message   = $installationGuardMessage
+    }
     task_results     = $taskResults
 }
 
@@ -564,11 +605,16 @@ if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
         -SummaryPath $env:GITHUB_STEP_SUMMARY `
         -TaskResults $taskResults `
         -OverallSuccess $overallSuccess `
+        -InstallationGuardTriggered $installationGuardTriggered `
+        -InstallationGuardMessage $installationGuardMessage `
         -ReportsRoot $reportsRootResolved `
         -StatusPath $statusPathResolved
 }
 
 Write-Host ("VI Analyzer status written to {0}" -f $statusPathResolved)
+if ($installationGuardTriggered) {
+    throw ("VI Analyzer installation guard failed: {0} See {1}" -f $installationGuardMessage, $statusPathResolved)
+}
 if (-not $overallSuccess) {
     $failedTasks = @($taskResults | Where-Object { -not $_.succeeded })
     $labels = if ($failedTasks.Count -gt 0) { ($failedTasks | ForEach-Object { $_.id }) -join ', ' } else { 'unknown' }
