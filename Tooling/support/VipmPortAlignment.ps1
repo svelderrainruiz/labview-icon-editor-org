@@ -51,7 +51,7 @@ function Convert-VipmPathToWindows {
     return ($Path -replace '/', '\')
 }
 
-function Get-IndexedIniValues {
+function Get-IndexedIniEntryMap {
     [CmdletBinding()]
     param(
         [string[]]$Lines,
@@ -72,7 +72,7 @@ function Get-IndexedIniValues {
     return $map
 }
 
-function Get-VipmPortsFromSettingsLines {
+function Get-VipmPortSpecFromSettingsLine {
     [CmdletBinding()]
     param(
         [string[]]$Lines
@@ -180,7 +180,7 @@ function Get-LabVIEWServerPortFromIni {
     return [int]$match.Groups[1].Value
 }
 
-function Get-VipmTargetsFromSettings {
+function Get-VipmTargetCatalogFromConfig {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
@@ -190,10 +190,10 @@ function Get-VipmTargetsFromSettings {
     $resolvedSettingsPath = (Resolve-Path -Path $SettingsPath -ErrorAction Stop).Path
     $lines = Get-Content -Path $resolvedSettingsPath
 
-    $versions = Get-IndexedIniValues -Lines $lines -KeyPrefix 'Versions'
-    $locations = Get-IndexedIniValues -Lines $lines -KeyPrefix 'Locations'
-    $disabledMap = Get-IndexedIniValues -Lines $lines -KeyPrefix 'Disabled'
-    $portsInfo = Get-VipmPortsFromSettingsLines -Lines $lines
+    $versions = Get-IndexedIniEntryMap -Lines $lines -KeyPrefix 'Versions'
+    $locations = Get-IndexedIniEntryMap -Lines $lines -KeyPrefix 'Locations'
+    $disabledMap = Get-IndexedIniEntryMap -Lines $lines -KeyPrefix 'Disabled'
+    $portsInfo = Get-VipmPortSpecFromSettingsLine -Lines $lines
 
     $allIndexes = @()
     $allIndexes += $versions.Keys
@@ -258,7 +258,7 @@ function Test-VipmTargetPortAlignment {
         (Resolve-Path -Path $SettingsPath -ErrorAction Stop).Path
     }
 
-    $targets = Get-VipmTargetsFromSettings -SettingsPath $resolvedSettingsPath
+    $targets = Get-VipmTargetCatalogFromConfig -SettingsPath $resolvedSettingsPath
 
     if ($PSBoundParameters.ContainsKey('LabVIEWVersion')) {
         $targets = $targets | Where-Object { $_.Year -eq $LabVIEWVersion }
@@ -384,7 +384,7 @@ function Repair-VipmTargetPortAlignment {
     }
 
     $lines = Get-Content -Path $resolvedSettingsPath
-    $portsInfo = Get-VipmPortsFromSettingsLines -Lines $lines
+    $portsInfo = Get-VipmPortSpecFromSettingsLine -Lines $lines
     $ports = @($portsInfo.Ports)
 
     $changedIndexes = @()
@@ -464,16 +464,16 @@ function Assert-VipmTargetPortAlignment {
         [switch]$IncludeDisabled
     )
 
-    $args = @{
+$checkArgs = @{
         SettingsPath = $SettingsPath
         Bitness = $Bitness
         IncludeDisabled = $IncludeDisabled
     }
     if ($PSBoundParameters.ContainsKey('LabVIEWVersion')) {
-        $args.LabVIEWVersion = $LabVIEWVersion
+        $checkArgs.LabVIEWVersion = $LabVIEWVersion
     }
 
-    $result = Test-VipmTargetPortAlignment @args
+    $result = Test-VipmTargetPortAlignment @checkArgs
     if (-not $result.passed) {
         $payload = $result | ConvertTo-Json -Depth 8
         throw "VIPM target port alignment check failed: $payload"

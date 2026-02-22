@@ -26,18 +26,18 @@ if (-not (Test-Path -Path $supportScript)) {
 }
 . $supportScript
 
-$args = @{
+$alignmentArgs = @{
     SettingsPath = $SettingsPath
     Bitness = $LabVIEWBitness
     IncludeDisabled = $IncludeDisabled
 }
 if ($PSBoundParameters.ContainsKey('LabVIEWVersion')) {
-    $args.LabVIEWVersion = $LabVIEWVersion
+    $alignmentArgs.LabVIEWVersion = $LabVIEWVersion
 }
 
 $result = $null
 if ($Fix.IsPresent) {
-    $repair = Repair-VipmTargetPortAlignment @args
+    $repair = Repair-VipmTargetPortAlignment @alignmentArgs
     $result = $repair.after
     if ($repair.changed) {
         Write-Host ("Updated VIPM target ports in '{0}' (backup: {1})." -f $result.settings_path, $repair.backup_path)
@@ -45,7 +45,7 @@ if ($Fix.IsPresent) {
         Write-Host 'No VIPM port changes were needed.'
     }
 } else {
-    $result = Test-VipmTargetPortAlignment @args
+    $result = Test-VipmTargetPortAlignment @alignmentArgs
 }
 
 if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
@@ -64,4 +64,3 @@ if ($result.passed) {
 Write-Error ('VIPM port alignment check failed. mismatches={0}' -f $result.mismatch_count)
 $result.mismatches | ConvertTo-Json -Depth 8 | Write-Host
 exit 1
-
