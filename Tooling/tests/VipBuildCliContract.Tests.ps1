@@ -32,6 +32,8 @@ Describe 'VIP build CLI contract' {
         $content | Should -Match 'Connection Timeout'
         $content | Should -Match 'Active Target\.Version'
         $content | Should -Match 'Active Target\.Name'
+        $content | Should -Match 'function Find-LineIndex'
+        $content | Should -Match '\[AllowEmptyString\(\)\]\s*\[string\[\]\]\$Lines'
         $content | Should -Match 'Set-VipmTargetSettingsFromContract\s*`?\s*-RepoRoot'
     }
 
