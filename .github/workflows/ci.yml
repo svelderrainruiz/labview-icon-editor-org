@@ -864,6 +864,10 @@ jobs:
 
           . $supportScript
           $auditPath = Join-Path $env:REPO_ROOT 'builds\status\vipm-port-audit-64.json'
+          $auditDir = Split-Path -Path $auditPath -Parent
+          if (-not (Test-Path -Path $auditDir)) {
+            New-Item -Path $auditDir -ItemType Directory -Force | Out-Null
+          }
           $labviewYear = [int]'${{ needs.version-gate.outputs.year }}'
           $auditResult = Test-VipmTargetPortAlignment -LabVIEWVersion $labviewYear -Bitness '64'
           $auditResult | ConvertTo-Json -Depth 8 | Out-File -FilePath $auditPath -Encoding ascii
@@ -1236,6 +1240,10 @@ jobs:
 
           . $supportScript
           $auditPath = Join-Path $env:REPO_ROOT 'builds\status\vipm-port-audit-32.json'
+          $auditDir = Split-Path -Path $auditPath -Parent
+          if (-not (Test-Path -Path $auditDir)) {
+            New-Item -Path $auditDir -ItemType Directory -Force | Out-Null
+          }
           $labviewYear = [int]'${{ needs.version-gate.outputs.year }}'
           $auditResult = Test-VipmTargetPortAlignment -LabVIEWVersion $labviewYear -Bitness '32'
           $auditResult | ConvertTo-Json -Depth 8 | Out-File -FilePath $auditPath -Encoding ascii
