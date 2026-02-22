@@ -75,7 +75,13 @@ param (
     [string]$DisplayInformationJsonPath,
 
     [ValidateRange(60, 3600)]
-    [int]$VipmTimeoutSeconds = 300
+    [int]$VipmTimeoutSeconds = 300,
+
+    [ValidateRange(30, 7200)]
+    [int]$VipbBuildLockTimeoutSeconds = 180,
+
+    [ValidateRange(60, 86400)]
+    [int]$VipbBuildLockStaleSeconds = 300
 )
 
 # 1) Resolve paths
@@ -113,6 +119,18 @@ if (Test-Path -Path $preflightScript) {
     }
     $ResolvedRepoRoot = $preflight.RepoRoot
 }
+
+$vipbLockSupportScript = Join-Path -Path $ResolvedRepoRoot -ChildPath 'Tooling\support\VipbBuildLock.ps1'
+if (-not (Test-Path -Path $vipbLockSupportScript -PathType Leaf)) {
+    $errorObject = [PSCustomObject]@{
+        error = "VIPB lock support script not found."
+        path  = $vipbLockSupportScript
+    }
+    $errorObject | ConvertTo-Json -Depth 10
+    exit 1
+}
+. $vipbLockSupportScript
+$vipbBuildLockPath = $null
 
 # 1b) Resolve LabVIEW version against .lvversion (fail-fast on mismatch)
 $sourceLabVIEWVersionRaw = $LabVIEWVersion
@@ -478,6 +496,14 @@ function Set-VipmTargetSettingsFromContract {
     }
 }
 
+$lockRoot = Get-VipbBuildLockRoot -RepoRoot $ResolvedRepoRoot
+$vipbBuildLockPath = Acquire-VipbBuildLock `
+    -LockRoot $lockRoot `
+    -VipbPath $ResolvedVIPBPath `
+    -TimeoutSeconds $VipbBuildLockTimeoutSeconds `
+    -StaleSeconds $VipbBuildLockStaleSeconds
+
+try {
 # 1b) Ensure VI Package output directory exists to avoid VIPM prompts
 $artifactRoot = $env:LVIE_ARTIFACT_ROOT
 $vipOutputDir = if ([string]::IsNullOrWhiteSpace($artifactRoot)) {
@@ -719,5 +745,11 @@ if (-not [string]::IsNullOrWhiteSpace($artifactRoot)) {
         }
     } catch {
         Write-Warning ("Failed to copy .vip to artifact root: {0}" -f $_.Exception.Message)
+    }
+}
+}
+finally {
+    if (-not [string]::IsNullOrWhiteSpace($vipbBuildLockPath)) {
+        Release-VipbBuildLock -LockPath $vipbBuildLockPath
     }
 }

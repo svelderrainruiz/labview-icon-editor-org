@@ -92,7 +92,11 @@ $pesterInfo = Import-RepoPester -RepoRoot $repoRoot -MinimumVersion ([version]'5
 Write-Host ("Using Pester {0} from {1}" -f $pesterInfo.Version, $pesterInfo.ModuleBase)
 
 $configuration = New-PesterConfiguration
-$configuration.Run.Path = $PSScriptRoot
+$additionalContractTests = @(
+    (Join-Path $repoRoot 'Test\BuildVipLockContract.Tests.ps1'),
+    (Join-Path $repoRoot 'Test\VipbBuildLock.Tests.ps1')
+) | Where-Object { Test-Path -Path $_ }
+$configuration.Run.Path = @($PSScriptRoot) + $additionalContractTests
 $configuration.Run.PassThru = $true
 $configuration.Output.Verbosity = 'Detailed'
 
