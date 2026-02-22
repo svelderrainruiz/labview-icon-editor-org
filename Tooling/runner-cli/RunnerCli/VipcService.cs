@@ -96,8 +96,9 @@ public static class VipcService
         AddValueArg(args, "-LabVIEWVersion", options.LabviewVersion);
         if (!options.FailOnMismatch)
         {
-            args.Add("-FailOnMismatch");
-            args.Add("false");
+            // PowerShell treats bare "false" tokens as strings when passed via ArgumentList.
+            // Use explicit parameter assignment so Assert-VipcApplied receives a true boolean.
+            args.Add("-FailOnMismatch:$false");
         }
 
         return PowerShellScriptRunner.Run(
