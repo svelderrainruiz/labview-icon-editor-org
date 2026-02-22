@@ -71,13 +71,13 @@ Describe "VipbBuildLock support module" {
         $vipbPath = Join-Path $script:tempRoot "fixture.vipb"
         Set-Content -Path $vipbPath -Value "<vipb/>" -NoNewline
 
-        $lockPath = Acquire-VipbBuildLock -LockRoot $lockRoot -VipbPath $vipbPath -TimeoutSeconds 5 -StaleSeconds 60 -PollIntervalSeconds 1
+        $lockPath = New-VipbBuildLockLease -LockRoot $lockRoot -VipbPath $vipbPath -TimeoutSeconds 5 -StaleSeconds 60 -PollIntervalSeconds 1
         try {
             Test-Path $lockPath | Should -BeTrue
             Test-Path (Join-Path $lockPath "lock.json") | Should -BeTrue
         }
         finally {
-            Release-VipbBuildLock -LockPath $lockPath
+            Remove-VipbBuildLockLease -LockPath $lockPath
         }
 
         Test-Path $lockPath | Should -BeFalse
@@ -101,13 +101,13 @@ Describe "VipbBuildLock support module" {
         }
         $staleMeta | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $lockPath "lock.json") -Encoding UTF8
 
-        $acquiredPath = Acquire-VipbBuildLock -LockRoot $lockRoot -VipbPath $vipbPath -TimeoutSeconds 5 -StaleSeconds 10 -PollIntervalSeconds 1
+        $acquiredPath = New-VipbBuildLockLease -LockRoot $lockRoot -VipbPath $vipbPath -TimeoutSeconds 5 -StaleSeconds 10 -PollIntervalSeconds 1
         try {
             $acquiredPath | Should -Be $lockPath
             Test-Path (Join-Path $lockPath "lock.json") | Should -BeTrue
         }
         finally {
-            Release-VipbBuildLock -LockPath $acquiredPath
+            Remove-VipbBuildLockLease -LockPath $acquiredPath
         }
     }
 
@@ -129,7 +129,7 @@ Describe "VipbBuildLock support module" {
         $activeMeta | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $lockPath "lock.json") -Encoding UTF8
 
         {
-            Acquire-VipbBuildLock -LockRoot $lockRoot -VipbPath $vipbPath -TimeoutSeconds 2 -StaleSeconds 3600 -PollIntervalSeconds 1
+            New-VipbBuildLockLease -LockRoot $lockRoot -VipbPath $vipbPath -TimeoutSeconds 2 -StaleSeconds 3600 -PollIntervalSeconds 1
         } | Should -Throw "*Timed out waiting for VIPB build lock*"
 
         Remove-Item -Path $lockPath -Recurse -Force

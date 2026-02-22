@@ -33,11 +33,11 @@ Describe "Build VIP lock contract" {
     It "sources the shared VIPB lock support script" {
         $content = Get-Content -Path $script:buildVipScript -Raw
         $content | Should -Match "Tooling\\support\\VipbBuildLock\.ps1"
-        $content | Should -Match "Acquire-VipbBuildLock"
-        $content | Should -Match "Release-VipbBuildLock"
+        $content | Should -Match "New-VipbBuildLockLease"
+        $content | Should -Match "Remove-VipbBuildLockLease"
 
         $sourceIndex = $content.IndexOf(". `$vipbLockSupportScript")
-        $acquireIndex = $content.IndexOf("Acquire-VipbBuildLock")
+        $acquireIndex = $content.IndexOf("New-VipbBuildLockLease")
         $sourceIndex | Should -BeGreaterThan -1
         $acquireIndex | Should -BeGreaterThan -1
         $sourceIndex | Should -BeLessThan $acquireIndex

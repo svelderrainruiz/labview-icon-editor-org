@@ -43,7 +43,7 @@ function Get-VipbBuildLockName {
     return "vipb-$hashHex.lock"
 }
 
-function Get-VipbBuildLockMetadata {
+function Get-VipbBuildLockInfo {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
@@ -64,7 +64,7 @@ function Get-VipbBuildLockMetadata {
     }
 }
 
-function Acquire-VipbBuildLock {
+function New-VipbBuildLockLease {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
@@ -107,7 +107,7 @@ function Acquire-VipbBuildLock {
                 continue
             }
 
-            $metadata = Get-VipbBuildLockMetadata -LockPath $lockPath
+            $metadata = Get-VipbBuildLockInfo -LockPath $lockPath
             $isStale = $false
             if ($null -ne $metadata) {
                 $acquiredAtUtc = $null
@@ -158,7 +158,7 @@ function Acquire-VipbBuildLock {
         Start-Sleep -Seconds $PollIntervalSeconds
     }
 
-    $owner = Get-VipbBuildLockMetadata -LockPath $lockPath
+    $owner = Get-VipbBuildLockInfo -LockPath $lockPath
     $ownerSummary = if ($null -eq $owner) {
         'unknown owner'
     }
@@ -169,7 +169,7 @@ function Acquire-VipbBuildLock {
     throw "Timed out waiting for VIPB build lock '$lockPath' after $TimeoutSeconds seconds. Current owner: $ownerSummary."
 }
 
-function Release-VipbBuildLock {
+function Remove-VipbBuildLockLease {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
