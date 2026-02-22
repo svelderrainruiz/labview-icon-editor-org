@@ -81,6 +81,10 @@ permissions:
   actions: read
   contents: read
 
+concurrency:
+  group: labview-parity-${{ github.repository }}-${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}-${{ github.ref_name }}
+  cancel-in-progress: ${{ github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
+
 jobs:
   self-hosted-capacity:
     name: Resolve self-hosted capacity

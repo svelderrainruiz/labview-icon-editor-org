@@ -64,6 +64,8 @@ For additional details and troubleshooting tips, see [INSTALL.md](INSTALL.md).
 3. **CI/CD Workflows** – GitHub Actions workflows are provided for common tasks:
    - **Build VI Package** – Compiles the source and produces a `.vip` artifact (VI Package).
    - **Run Unit Tests** (now part of the main CI pipeline) – Executes automated tests to verify the Icon Editor’s behavior in a clean LabVIEW environment.
+   - **VIP Production Contract (develop)** – For upstream `develop` pushes, CI requires successful VIP build + prerelease publish status and emits `vip-production-attestation` as proof.
+   - **VIP Production Watchdog** – Scheduled/manual workflow verifies latest `develop` head still has a successful `CI Pipeline` run with attestation artifact.
    Additional details on these pipelines are in [CI Workflows](docs/ci-workflows.md).
 
 ---

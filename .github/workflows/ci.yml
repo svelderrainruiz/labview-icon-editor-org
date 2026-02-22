@@ -22,8 +22,8 @@ env:
   LVIE_PYLAVI_FAIL_ON_DELTA: ${{ vars.LVIE_PYLAVI_FAIL_ON_DELTA || '0' }}
 
 concurrency:
-  group: labview-${{ github.repository }}-${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: labview-${{ github.repository }}-${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('ref-{0}', github.ref_name) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop') }}
 
 on:
   push:
@@ -314,7 +314,19 @@ jobs:
 
             if (context.eventName === 'push' && context.ref === 'refs/heads/develop') {
               publishMode = 'auto';
-              if (!isMergeCommit) {
+              const isCanonicalRepo = context.repo.owner === 'LabVIEW-Community-CI-CD' && context.repo.repo === 'labview-icon-editor';
+              if (isCanonicalRepo) {
+                shouldPublish = true;
+                if (mergedPr) {
+                  publishReason = 'auto-required-upstream-develop-push-merged-pr-merge-commit';
+                } else if (!isMergeCommit) {
+                  publishReason = 'auto-required-upstream-develop-push-non-merge-commit';
+                } else if (hasMergedDevelopPrAssociation) {
+                  publishReason = 'auto-required-upstream-develop-push-merged-pr-sha-mismatch';
+                } else {
+                  publishReason = 'auto-required-upstream-develop-push-no-merged-pr-association';
+                }
+              } else if (!isMergeCommit) {
                 shouldPublish = false;
                 publishReason = 'develop-push-not-merge-commit';
               } else if (mergedPr) {
@@ -699,6 +711,10 @@ jobs:
         shell: pwsh
         run: |
           pwsh -NoProfile -File "$env:GITHUB_WORKSPACE/Tooling/Test-SoloMaintainerWorkflowContract.ps1" -WriteSummary
+      - name: Validate CI VIP production contract
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE/Tooling/Test-CiVipProductionContract.ps1" -WriteSummary
       - name: Install PSScriptAnalyzer
         shell: pwsh
         run: |
@@ -836,6 +852,109 @@ jobs:
           bitness: 64
           create_worktree: 'true'
           worktree_root_mode: runner_temp
+      - name: Audit VIPM port alignment (LV x64)
+        id: vipm_port_audit
+        shell: pwsh
+        working-directory: ${{ env.REPO_ROOT }}
+        run: |
+          $supportScript = Join-Path $env:REPO_ROOT 'Tooling\support\VipmPortAlignment.ps1'
+          if (-not (Test-Path -Path $supportScript -PathType Leaf)) {
+            throw "VIPM port support script not found at $supportScript"
+          }
+
+          . $supportScript
+          $auditPath = Join-Path $env:REPO_ROOT 'builds\status\vipm-port-audit-64.json'
+          $labviewYear = [int]'${{ needs.version-gate.outputs.year }}'
+          $auditResult = Test-VipmTargetPortAlignment -LabVIEWVersion $labviewYear -Bitness '64'
+          $auditResult | ConvertTo-Json -Depth 8 | Out-File -FilePath $auditPath -Encoding ascii
+          $mismatchCount = [int]$auditResult.mismatch_count
+
+          Write-Host ("VIPM port mismatches (64-bit): {0}" -f $mismatchCount)
+          "vipm_port_audit_path=$auditPath" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
+          "vipm_port_mismatch_count=$mismatchCount" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
+      - name: Report VIPM alignment status (LV x64)
+        shell: pwsh
+        run: |
+          if ('${{ steps.vipm_port_audit.outputs.vipm_port_mismatch_count }}' -eq '0') {
+            Write-Host "VIPM/LabVIEW server port alignment is already compliant for LV x64."
+          } else {
+            Write-Warning "VIPM/LabVIEW server port drift detected for LV x64; remediation will run."
+          }
+      - name: Remediate VIPM port alignment (LV x64)
+        if: ${{ steps.vipm_port_audit.outputs.vipm_port_mismatch_count != '0' }}
+        shell: pwsh
+        working-directory: ${{ env.REPO_ROOT }}
+        run: |
+          $reportPath = Join-Path $env:REPO_ROOT 'builds\status\vipm-port-fix-64.json'
+          $labviewYear = [int]'${{ needs.version-gate.outputs.year }}'
+          & pwsh -NoProfile -File "$env:REPO_ROOT\Tooling\Assert-VipmPortAlignment.ps1" `
+            -LabVIEWVersion $labviewYear `
+            -LabVIEWBitness 64 `
+            -Fix `
+            -OutputPath $reportPath
+      - name: Re-assert VIPM port alignment (LV x64)
+        if: ${{ steps.vipm_port_audit.outputs.vipm_port_mismatch_count != '0' }}
+        shell: pwsh
+        working-directory: ${{ env.REPO_ROOT }}
+        run: |
+          $reportPath = Join-Path $env:REPO_ROOT 'builds\status\vipm-port-reassert-64.json'
+          $labviewYear = [int]'${{ needs.version-gate.outputs.year }}'
+          & pwsh -NoProfile -File "$env:REPO_ROOT\Tooling\Assert-VipmPortAlignment.ps1" `
+            -LabVIEWVersion $labviewYear `
+            -LabVIEWBitness 64 `
+            -OutputPath $reportPath
+      - name: VIPM remediation summary (LV x64)
+        if: ${{ steps.vipm_port_audit.outputs.vipm_port_mismatch_count != '0' }}
+        shell: pwsh
+        working-directory: ${{ env.REPO_ROOT }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
+            Write-Host "GITHUB_STEP_SUMMARY not available; skipping VIPM remediation summary."
+            exit 0
+          }
+
+          $beforePath = Join-Path $env:REPO_ROOT 'builds\status\vipm-port-audit-64.json'
+          $afterPath = Join-Path $env:REPO_ROOT 'builds\status\vipm-port-reassert-64.json'
+          if (-not (Test-Path -Path $beforePath -PathType Leaf)) {
+            throw "VIPM pre-remediation audit report not found at $beforePath"
+          }
+          if (-not (Test-Path -Path $afterPath -PathType Leaf)) {
+            throw "VIPM post-remediation report not found at $afterPath"
+          }
+
+          $before = Get-Content -Path $beforePath -Raw | ConvertFrom-Json
+          $after = Get-Content -Path $afterPath -Raw | ConvertFrom-Json
+          $beforeMismatch = @($before.mismatches)
+          $afterMismatch = @($after.mismatches)
+          $afterKeys = @{}
+          foreach ($item in $afterMismatch) {
+            $key = "{0}:{1}:{2}" -f $item.index, $item.bitness, $item.reason
+            $afterKeys[$key] = $true
+          }
+          $remediated = New-Object System.Collections.Generic.List[string]
+          foreach ($item in $beforeMismatch) {
+            $key = "{0}:{1}:{2}" -f $item.index, $item.bitness, $item.reason
+            if (-not $afterKeys.ContainsKey($key)) {
+              $remediated.Add(("{0} ({1}-bit, reason={2})" -f $item.version, $item.bitness, $item.reason)) | Out-Null
+            }
+          }
+          $uniqueRemediated = @($remediated | Sort-Object -Unique)
+
+          $summaryLines = @(
+            '### VIPM Port Remediation (LV x64)'
+            ("- Before mismatches: {0}" -f $beforeMismatch.Count)
+            ("- After mismatches: {0}" -f $afterMismatch.Count)
+            ("- Remediated targets: {0}" -f $uniqueRemediated.Count)
+          )
+          if ($uniqueRemediated.Count -gt 0) {
+            $summaryLines += ''
+            $summaryLines += '- Remediation actions:'
+            foreach ($entry in $uniqueRemediated) {
+              $summaryLines += ("  - `{0}`" -f $entry)
+            }
+          }
+
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ($summaryLines -join [Environment]::NewLine)
       - name: Audit VIPC apply (LV x64)
         id: vipc_audit
         shell: pwsh
@@ -1031,6 +1150,27 @@ jobs:
           if ($exitCode -ne 0) {
             exit $exitCode
           }
+      - name: Upload VIPM port audit artifact (LV x64)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: vipm-port-audit-64
+          path: ${{ env.REPO_ROOT }}/builds/status/vipm-port-audit-64.json
+          if-no-files-found: warn
+      - name: Upload VIPM port fix artifact (LV x64)
+        if: ${{ always() && steps.vipm_port_audit.outputs.vipm_port_mismatch_count != '0' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: vipm-port-fix-64
+          path: ${{ env.REPO_ROOT }}/builds/status/vipm-port-fix-64.json
+          if-no-files-found: warn
+      - name: Upload VIPM port re-assert artifact (LV x64)
+        if: ${{ always() && steps.vipm_port_audit.outputs.vipm_port_mismatch_count != '0' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: vipm-port-reassert-64
+          path: ${{ env.REPO_ROOT }}/builds/status/vipm-port-reassert-64.json
+          if-no-files-found: warn
       - name: Upload VIPC audit artifact (LV x64)
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
@@ -1084,6 +1224,109 @@ jobs:
           bitness: 32
           create_worktree: 'true'
           worktree_root_mode: runner_temp
+      - name: Audit VIPM port alignment (LV x86)
+        id: vipm_port_audit
+        shell: pwsh
+        working-directory: ${{ env.REPO_ROOT }}
+        run: |
+          $supportScript = Join-Path $env:REPO_ROOT 'Tooling\support\VipmPortAlignment.ps1'
+          if (-not (Test-Path -Path $supportScript -PathType Leaf)) {
+            throw "VIPM port support script not found at $supportScript"
+          }
+
+          . $supportScript
+          $auditPath = Join-Path $env:REPO_ROOT 'builds\status\vipm-port-audit-32.json'
+          $labviewYear = [int]'${{ needs.version-gate.outputs.year }}'
+          $auditResult = Test-VipmTargetPortAlignment -LabVIEWVersion $labviewYear -Bitness '32'
+          $auditResult | ConvertTo-Json -Depth 8 | Out-File -FilePath $auditPath -Encoding ascii
+          $mismatchCount = [int]$auditResult.mismatch_count
+
+          Write-Host ("VIPM port mismatches (32-bit): {0}" -f $mismatchCount)
+          "vipm_port_audit_path=$auditPath" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
+          "vipm_port_mismatch_count=$mismatchCount" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
+      - name: Report VIPM alignment status (LV x86)
+        shell: pwsh
+        run: |
+          if ('${{ steps.vipm_port_audit.outputs.vipm_port_mismatch_count }}' -eq '0') {
+            Write-Host "VIPM/LabVIEW server port alignment is already compliant for LV x86."
+          } else {
+            Write-Warning "VIPM/LabVIEW server port drift detected for LV x86; remediation will run."
+          }
+      - name: Remediate VIPM port alignment (LV x86)
+        if: ${{ steps.vipm_port_audit.outputs.vipm_port_mismatch_count != '0' }}
+        shell: pwsh
+        working-directory: ${{ env.REPO_ROOT }}
+        run: |
+          $reportPath = Join-Path $env:REPO_ROOT 'builds\status\vipm-port-fix-32.json'
+          $labviewYear = [int]'${{ needs.version-gate.outputs.year }}'
+          & pwsh -NoProfile -File "$env:REPO_ROOT\Tooling\Assert-VipmPortAlignment.ps1" `
+            -LabVIEWVersion $labviewYear `
+            -LabVIEWBitness 32 `
+            -Fix `
+            -OutputPath $reportPath
+      - name: Re-assert VIPM port alignment (LV x86)
+        if: ${{ steps.vipm_port_audit.outputs.vipm_port_mismatch_count != '0' }}
+        shell: pwsh
+        working-directory: ${{ env.REPO_ROOT }}
+        run: |
+          $reportPath = Join-Path $env:REPO_ROOT 'builds\status\vipm-port-reassert-32.json'
+          $labviewYear = [int]'${{ needs.version-gate.outputs.year }}'
+          & pwsh -NoProfile -File "$env:REPO_ROOT\Tooling\Assert-VipmPortAlignment.ps1" `
+            -LabVIEWVersion $labviewYear `
+            -LabVIEWBitness 32 `
+            -OutputPath $reportPath
+      - name: VIPM remediation summary (LV x86)
+        if: ${{ steps.vipm_port_audit.outputs.vipm_port_mismatch_count != '0' }}
+        shell: pwsh
+        working-directory: ${{ env.REPO_ROOT }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
+            Write-Host "GITHUB_STEP_SUMMARY not available; skipping VIPM remediation summary."
+            exit 0
+          }
+
+          $beforePath = Join-Path $env:REPO_ROOT 'builds\status\vipm-port-audit-32.json'
+          $afterPath = Join-Path $env:REPO_ROOT 'builds\status\vipm-port-reassert-32.json'
+          if (-not (Test-Path -Path $beforePath -PathType Leaf)) {
+            throw "VIPM pre-remediation audit report not found at $beforePath"
+          }
+          if (-not (Test-Path -Path $afterPath -PathType Leaf)) {
+            throw "VIPM post-remediation report not found at $afterPath"
+          }
+
+          $before = Get-Content -Path $beforePath -Raw | ConvertFrom-Json
+          $after = Get-Content -Path $afterPath -Raw | ConvertFrom-Json
+          $beforeMismatch = @($before.mismatches)
+          $afterMismatch = @($after.mismatches)
+          $afterKeys = @{}
+          foreach ($item in $afterMismatch) {
+            $key = "{0}:{1}:{2}" -f $item.index, $item.bitness, $item.reason
+            $afterKeys[$key] = $true
+          }
+          $remediated = New-Object System.Collections.Generic.List[string]
+          foreach ($item in $beforeMismatch) {
+            $key = "{0}:{1}:{2}" -f $item.index, $item.bitness, $item.reason
+            if (-not $afterKeys.ContainsKey($key)) {
+              $remediated.Add(("{0} ({1}-bit, reason={2})" -f $item.version, $item.bitness, $item.reason)) | Out-Null
+            }
+          }
+          $uniqueRemediated = @($remediated | Sort-Object -Unique)
+
+          $summaryLines = @(
+            '### VIPM Port Remediation (LV x86)'
+            ("- Before mismatches: {0}" -f $beforeMismatch.Count)
+            ("- After mismatches: {0}" -f $afterMismatch.Count)
+            ("- Remediated targets: {0}" -f $uniqueRemediated.Count)
+          )
+          if ($uniqueRemediated.Count -gt 0) {
+            $summaryLines += ''
+            $summaryLines += '- Remediation actions:'
+            foreach ($entry in $uniqueRemediated) {
+              $summaryLines += ("  - `{0}`" -f $entry)
+            }
+          }
+
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ($summaryLines -join [Environment]::NewLine)
       - name: Audit VIPC apply (LV x86)
         id: vipc_audit
         shell: pwsh
@@ -1279,6 +1522,27 @@ jobs:
           if ($exitCode -ne 0) {
             exit $exitCode
           }
+      - name: Upload VIPM port audit artifact (LV x86)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: vipm-port-audit-32
+          path: ${{ env.REPO_ROOT }}/builds/status/vipm-port-audit-32.json
+          if-no-files-found: warn
+      - name: Upload VIPM port fix artifact (LV x86)
+        if: ${{ always() && steps.vipm_port_audit.outputs.vipm_port_mismatch_count != '0' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: vipm-port-fix-32
+          path: ${{ env.REPO_ROOT }}/builds/status/vipm-port-fix-32.json
+          if-no-files-found: warn
+      - name: Upload VIPM port re-assert artifact (LV x86)
+        if: ${{ always() && steps.vipm_port_audit.outputs.vipm_port_mismatch_count != '0' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: vipm-port-reassert-32
+          path: ${{ env.REPO_ROOT }}/builds/status/vipm-port-reassert-32.json
+          if-no-files-found: warn
       - name: Upload VIPC audit artifact (LV x86)
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
@@ -3408,6 +3672,90 @@ jobs:
           path: builds/status/solo-release-evidence.json
           if-no-files-found: warn
 
+  vip-production-contract:
+    name: VIP Production Contract
+    if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/develop' && github.repository == 'LabVIEW-Community-CI-CD/labview-icon-editor' }}
+    needs: [run-metadata, prerelease-context, build-vip, publish-prerelease, pipeline-contract, version]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download VI package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build-vip.outputs.vip_artifact_name }}
+          path: ${{ runner.temp }}/vip-production-contract/vip
+      - name: Download prerelease publish status
+        uses: actions/download-artifact@v4
+        with:
+          name: prerelease-publish-status
+          path: ${{ runner.temp }}/vip-production-contract/publish-status
+      - name: Validate VIP production contract and emit attestation
+        shell: pwsh
+        run: |
+          $buildVipResult = '${{ needs.build-vip.result }}'
+          $publishResult = '${{ needs.publish-prerelease.result }}'
+          $pipelineContractResult = '${{ needs.pipeline-contract.result }}'
+          $prereleaseContextResult = '${{ needs.prerelease-context.result }}'
+
+          $dependencyFailures = @()
+          if ($prereleaseContextResult -ne 'success') { $dependencyFailures += "prerelease-context:$prereleaseContextResult" }
+          if ($buildVipResult -ne 'success') { $dependencyFailures += "build-vip:$buildVipResult" }
+          if ($publishResult -ne 'success') { $dependencyFailures += "publish-prerelease:$publishResult" }
+          if ($pipelineContractResult -ne 'success') { $dependencyFailures += "pipeline-contract:$pipelineContractResult" }
+          if ($dependencyFailures.Count -gt 0) {
+            throw ("VIP production prerequisites failed: {0}" -f ($dependencyFailures -join ', '))
+          }
+
+          $vipRoot = Join-Path $env:RUNNER_TEMP 'vip-production-contract/vip'
+          $vipFiles = Get-ChildItem -Path $vipRoot -Filter '*.vip' -File -Recurse -ErrorAction SilentlyContinue | Sort-Object FullName
+          if (-not $vipFiles -or $vipFiles.Count -eq 0) {
+            throw "VIP Production Contract failed: no .vip file found in artifact path '$vipRoot'."
+          }
+
+          $publishStatusPath = Join-Path $env:RUNNER_TEMP 'vip-production-contract/publish-status/prerelease-publish.json'
+          if (-not (Test-Path -Path $publishStatusPath -PathType Leaf)) {
+            throw "VIP Production Contract failed: prerelease publish status file not found at '$publishStatusPath'."
+          }
+
+          $publishStatus = Get-Content -Path $publishStatusPath -Raw | ConvertFrom-Json
+          if (-not $publishStatus.should_publish) {
+            throw "VIP Production Contract failed: prerelease status indicates should_publish=false."
+          }
+          if ($publishStatus.publish_status -notin @('published', 'already-published')) {
+            throw ("VIP Production Contract failed: prerelease publish status '{0}' is not successful." -f $publishStatus.publish_status)
+          }
+
+          $attestationPath = Join-Path $env:GITHUB_WORKSPACE 'builds/status/vip-production-attestation.json'
+          $attestationDir = Split-Path -Path $attestationPath -Parent
+          if (-not (Test-Path -Path $attestationDir)) {
+            New-Item -Path $attestationDir -ItemType Directory -Force | Out-Null
+          }
+
+          $attestation = [ordered]@{
+            run_id = '${{ github.run_id }}'
+            run_attempt = '${{ github.run_attempt }}'
+            sha = '${{ github.sha }}'
+            ref = '${{ github.ref }}'
+            event = '${{ github.event_name }}'
+            workflow = '${{ github.workflow }}'
+            repository = '${{ github.repository }}'
+            version = '${{ needs.version.outputs.VERSION }}'
+            publish_status = [string]$publishStatus.publish_status
+            publish_reason = [string]$publishStatus.publish_reason
+            release_tag = [string]$publishStatus.release_tag
+            release_url = [string]$publishStatus.release_url
+            vip_files = @($vipFiles | ForEach-Object { $_.Name })
+            vip_file_count = $vipFiles.Count
+            generated_utc = (Get-Date).ToUniversalTime().ToString('o')
+          }
+          $attestation | ConvertTo-Json -Depth 8 | Out-File -FilePath $attestationPath -Encoding utf8
+      - name: Upload VIP production attestation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vip-production-attestation
+          path: builds/status/vip-production-attestation.json
+          if-no-files-found: error
+
   pipeline-contract:
     name: Pipeline Contract
     if: always()
@@ -3571,6 +3919,7 @@ jobs:
       - docs-lint
       - powershell-lint
       - pipeline-contract
+      - vip-production-contract
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate canonical required check context
@@ -3579,10 +3928,14 @@ jobs:
           $docsLintResult = '${{ needs.docs-lint.result }}'
           $lintResult = '${{ needs.powershell-lint.result }}'
           $contractResult = '${{ needs.pipeline-contract.result }}'
+          $vipProductionResult = '${{ needs.vip-production-contract.result }}'
+          $isCanonicalDevelopPush = '${{ github.event_name == 'push' && github.ref == 'refs/heads/develop' && github.repository == 'LabVIEW-Community-CI-CD/labview-icon-editor' }}' -eq 'true'
 
           Write-Host ("Documentation Lint result: {0}" -f $docsLintResult)
           Write-Host ("PowerShell Lint result: {0}" -f $lintResult)
           Write-Host ("Pipeline Contract result: {0}" -f $contractResult)
+          Write-Host ("VIP Production Contract result: {0}" -f $vipProductionResult)
+          Write-Host ("Canonical develop push: {0}" -f $isCanonicalDevelopPush)
 
           $failing = @()
           if ($docsLintResult -ne 'success') {
@@ -3593,6 +3946,9 @@ jobs:
           }
           if ($contractResult -ne 'success') {
             $failing += "pipeline-contract:$contractResult"
+          }
+          if ($isCanonicalDevelopPush -and $vipProductionResult -ne 'success') {
+            $failing += "vip-production-contract:$vipProductionResult"
           }
 
           if ($failing.Count -gt 0) {

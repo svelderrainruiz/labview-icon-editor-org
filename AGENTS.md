@@ -357,6 +357,9 @@ Notes:
 Auto path:
 - `.github/workflows/prerelease-auto-dispatch.yml` listens to successful `CI Pipeline` `push` runs on `develop`.
 - It re-checks merged-PR merge-commit eligibility and dispatches strict publish intent through `Tooling\Invoke-DeterministicPrereleasePublish.ps1 -ReleasePriority`.
+- In the canonical upstream repo (`LabVIEW-Community-CI-CD/labview-icon-editor`), `CI Pipeline` treats every `develop` push as publish-required and validates it with the `VIP Production Contract` job.
+- `VIP Production Contract` is authoritative for upstream `develop` VIP production and must emit `vip-production-attestation` artifact on success.
+- VIPM port alignment remediation now runs before VIPC apply in both bitness lanes and writes remediation details to step summary when drift is corrected.
 
 Fallback helper (manual):
 Use this when replaying publication for a specific merged `develop` SHA:
@@ -374,6 +377,11 @@ pwsh -NoProfile -File .\Tooling\Invoke-DeterministicPrereleasePublish.ps1 `
 Notes:
 - The helper creates a temporary `ci-run` branch ref, dispatches with `publish_prerelease=true`, `expected_sha=<sha>`, and `strict_sha=true`, and deletes the temp ref by default.
 - Optional `-ReleasePriority` selects the release-priority dispatch profile (`force_gcli_lunit=true`).
+
+VIP production watchdog:
+- `.github/workflows/vip-production-watchdog.yml` runs on `schedule` and `workflow_dispatch`.
+- The watchdog validates latest `develop` head CI success plus `vip-production-attestation` presence using `Tooling\Assert-DevelopVipGuarantee.ps1`.
+- Contract failures open/update tracking issue `[Watchdog] develop VIP production guarantee failed`.
 
 ## Background automation safety
 Some automation may be running in the background and must not be killed. Do not terminate `g-cli` or `LabVIEW` processes unless you have explicit confirmation it is safe.
