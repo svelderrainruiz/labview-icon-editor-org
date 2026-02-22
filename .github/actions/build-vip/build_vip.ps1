@@ -269,6 +269,7 @@ function Find-LineIndex {
     param(
         [Parameter(Mandatory = $true)]
         [AllowEmptyCollection()]
+        [AllowEmptyString()]
         [string[]]$Lines,
         [Parameter(Mandatory = $true)]
         [string]$Pattern,
