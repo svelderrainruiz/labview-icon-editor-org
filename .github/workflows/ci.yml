@@ -965,11 +965,18 @@ jobs:
         working-directory: ${{ env.REPO_ROOT }}
         run: |
           $runnerCliProject = Join-Path $env:REPO_ROOT 'Tooling/runner-cli/RunnerCli/RunnerCli.csproj'
-          $runnerCliPath = $env:LVIE_RUNNER_CLI_PATH
-          $runnerCliDll = if (-not [string]::IsNullOrWhiteSpace($runnerCliPath)) { [System.IO.Path]::ChangeExtension($runnerCliPath, '.dll') } else { '' }
-          $useRunnerCliDll = -not [string]::IsNullOrWhiteSpace($runnerCliDll) -and (Test-Path -Path $runnerCliDll -PathType Leaf)
-          if (-not $useRunnerCliDll -and -not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
+          if (-not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
             throw "runner-cli project not found at $runnerCliProject"
+          }
+          & dotnet build $runnerCliProject --configuration Release -nologo /p:UseAppHost=false
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+          $runnerCliDll = Get-ChildItem -Path (Join-Path $env:REPO_ROOT 'Tooling/runner-cli/RunnerCli/bin/Release') -Filter 'runner-cli.dll' -Recurse -File -ErrorAction SilentlyContinue |
+            Sort-Object -Property LastWriteTimeUtc -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+          if ([string]::IsNullOrWhiteSpace($runnerCliDll) -or -not (Test-Path -Path $runnerCliDll -PathType Leaf)) {
+            throw "runner-cli.dll not found under Tooling/runner-cli/RunnerCli/bin/Release after in-place build."
           }
 
           $auditPath = "$env:REPO_ROOT\\builds\\status\\vipc-audit-64.json"
@@ -981,11 +988,7 @@ jobs:
             '--output-path', $auditPath,
             '--fail-on-mismatch', 'false'
           )
-          if ($useRunnerCliDll) {
-            & dotnet $runnerCliDll @runnerCliArgs
-          } else {
-            & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs
-          }
+          & dotnet $runnerCliDll @runnerCliArgs
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
@@ -1016,11 +1019,18 @@ jobs:
         working-directory: ${{ env.REPO_ROOT }}
         run: |
           $runnerCliProject = Join-Path $env:REPO_ROOT 'Tooling/runner-cli/RunnerCli/RunnerCli.csproj'
-          $runnerCliPath = $env:LVIE_RUNNER_CLI_PATH
-          $runnerCliDll = if (-not [string]::IsNullOrWhiteSpace($runnerCliPath)) { [System.IO.Path]::ChangeExtension($runnerCliPath, '.dll') } else { '' }
-          $useRunnerCliDll = -not [string]::IsNullOrWhiteSpace($runnerCliDll) -and (Test-Path -Path $runnerCliDll -PathType Leaf)
-          if (-not $useRunnerCliDll -and -not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
+          if (-not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
             throw "runner-cli project not found at $runnerCliProject"
+          }
+          & dotnet build $runnerCliProject --configuration Release -nologo /p:UseAppHost=false
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+          $runnerCliDll = Get-ChildItem -Path (Join-Path $env:REPO_ROOT 'Tooling/runner-cli/RunnerCli/bin/Release') -Filter 'runner-cli.dll' -Recurse -File -ErrorAction SilentlyContinue |
+            Sort-Object -Property LastWriteTimeUtc -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+          if ([string]::IsNullOrWhiteSpace($runnerCliDll) -or -not (Test-Path -Path $runnerCliDll -PathType Leaf)) {
+            throw "runner-cli.dll not found under Tooling/runner-cli/RunnerCli/bin/Release after in-place build."
           }
 
           $logPath = Join-Path $env:REPO_ROOT 'builds\status\vipc-remediate-64.log'
@@ -1036,11 +1046,7 @@ jobs:
             '--supported-bitness', '64',
             '--vipc-path', '.github/actions/apply-vipc/runner_dependencies.vipc'
           )
-          if ($useRunnerCliDll) {
-            $output = & dotnet $runnerCliDll @runnerCliArgs *>&1
-          } else {
-            $output = & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs *>&1
-          }
+          $output = & dotnet $runnerCliDll @runnerCliArgs *>&1
           $exitCode = $LASTEXITCODE
 
           if ($output) {
@@ -1059,11 +1065,18 @@ jobs:
         working-directory: ${{ env.REPO_ROOT }}
         run: |
           $runnerCliProject = Join-Path $env:REPO_ROOT 'Tooling/runner-cli/RunnerCli/RunnerCli.csproj'
-          $runnerCliPath = $env:LVIE_RUNNER_CLI_PATH
-          $runnerCliDll = if (-not [string]::IsNullOrWhiteSpace($runnerCliPath)) { [System.IO.Path]::ChangeExtension($runnerCliPath, '.dll') } else { '' }
-          $useRunnerCliDll = -not [string]::IsNullOrWhiteSpace($runnerCliDll) -and (Test-Path -Path $runnerCliDll -PathType Leaf)
-          if (-not $useRunnerCliDll -and -not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
+          if (-not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
             throw "runner-cli project not found at $runnerCliProject"
+          }
+          & dotnet build $runnerCliProject --configuration Release -nologo /p:UseAppHost=false
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+          $runnerCliDll = Get-ChildItem -Path (Join-Path $env:REPO_ROOT 'Tooling/runner-cli/RunnerCli/bin/Release') -Filter 'runner-cli.dll' -Recurse -File -ErrorAction SilentlyContinue |
+            Sort-Object -Property LastWriteTimeUtc -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+          if ([string]::IsNullOrWhiteSpace($runnerCliDll) -or -not (Test-Path -Path $runnerCliDll -PathType Leaf)) {
+            throw "runner-cli.dll not found under Tooling/runner-cli/RunnerCli/bin/Release after in-place build."
           }
 
           $runnerCliArgs = @(
@@ -1073,11 +1086,7 @@ jobs:
             '--vipc-path', '.github/actions/apply-vipc/runner_dependencies.vipc',
             '--output-path', "$env:REPO_ROOT\\builds\\status\\vipc-audit-post-64.json"
           )
-          if ($useRunnerCliDll) {
-            & dotnet $runnerCliDll @runnerCliArgs
-          } else {
-            & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs
-          }
+          & dotnet $runnerCliDll @runnerCliArgs
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
@@ -1145,11 +1154,18 @@ jobs:
         working-directory: ${{ env.REPO_ROOT }}
         run: |
           $runnerCliProject = Join-Path $env:REPO_ROOT 'Tooling/runner-cli/RunnerCli/RunnerCli.csproj'
-          $runnerCliPath = $env:LVIE_RUNNER_CLI_PATH
-          $runnerCliDll = if (-not [string]::IsNullOrWhiteSpace($runnerCliPath)) { [System.IO.Path]::ChangeExtension($runnerCliPath, '.dll') } else { '' }
-          $useRunnerCliDll = -not [string]::IsNullOrWhiteSpace($runnerCliDll) -and (Test-Path -Path $runnerCliDll -PathType Leaf)
-          if (-not $useRunnerCliDll -and -not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
+          if (-not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
             throw "runner-cli project not found at $runnerCliProject"
+          }
+          & dotnet build $runnerCliProject --configuration Release -nologo /p:UseAppHost=false
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+          $runnerCliDll = Get-ChildItem -Path (Join-Path $env:REPO_ROOT 'Tooling/runner-cli/RunnerCli/bin/Release') -Filter 'runner-cli.dll' -Recurse -File -ErrorAction SilentlyContinue |
+            Sort-Object -Property LastWriteTimeUtc -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+          if ([string]::IsNullOrWhiteSpace($runnerCliDll) -or -not (Test-Path -Path $runnerCliDll -PathType Leaf)) {
+            throw "runner-cli.dll not found under Tooling/runner-cli/RunnerCli/bin/Release after in-place build."
           }
 
           $logPath = Join-Path $env:REPO_ROOT 'builds\status\vipc-apply-64.log'
@@ -1165,11 +1181,7 @@ jobs:
             '--supported-bitness', '64',
             '--vipc-path', '.github/actions/apply-vipc/runner_dependencies.vipc'
           )
-          if ($useRunnerCliDll) {
-            $output = & dotnet $runnerCliDll @runnerCliArgs *>&1
-          } else {
-            $output = & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs *>&1
-          }
+          $output = & dotnet $runnerCliDll @runnerCliArgs *>&1
           $exitCode = $LASTEXITCODE
 
           if ($output) {
@@ -1369,11 +1381,18 @@ jobs:
         working-directory: ${{ env.REPO_ROOT }}
         run: |
           $runnerCliProject = Join-Path $env:REPO_ROOT 'Tooling/runner-cli/RunnerCli/RunnerCli.csproj'
-          $runnerCliPath = $env:LVIE_RUNNER_CLI_PATH
-          $runnerCliDll = if (-not [string]::IsNullOrWhiteSpace($runnerCliPath)) { [System.IO.Path]::ChangeExtension($runnerCliPath, '.dll') } else { '' }
-          $useRunnerCliDll = -not [string]::IsNullOrWhiteSpace($runnerCliDll) -and (Test-Path -Path $runnerCliDll -PathType Leaf)
-          if (-not $useRunnerCliDll -and -not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
+          if (-not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
             throw "runner-cli project not found at $runnerCliProject"
+          }
+          & dotnet build $runnerCliProject --configuration Release -nologo /p:UseAppHost=false
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+          $runnerCliDll = Get-ChildItem -Path (Join-Path $env:REPO_ROOT 'Tooling/runner-cli/RunnerCli/bin/Release') -Filter 'runner-cli.dll' -Recurse -File -ErrorAction SilentlyContinue |
+            Sort-Object -Property LastWriteTimeUtc -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+          if ([string]::IsNullOrWhiteSpace($runnerCliDll) -or -not (Test-Path -Path $runnerCliDll -PathType Leaf)) {
+            throw "runner-cli.dll not found under Tooling/runner-cli/RunnerCli/bin/Release after in-place build."
           }
 
           $auditPath = "$env:REPO_ROOT\\builds\\status\\vipc-audit-32.json"
@@ -1385,11 +1404,7 @@ jobs:
             '--output-path', $auditPath,
             '--fail-on-mismatch', 'false'
           )
-          if ($useRunnerCliDll) {
-            & dotnet $runnerCliDll @runnerCliArgs
-          } else {
-            & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs
-          }
+          & dotnet $runnerCliDll @runnerCliArgs
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
@@ -1420,11 +1435,18 @@ jobs:
         working-directory: ${{ env.REPO_ROOT }}
         run: |
           $runnerCliProject = Join-Path $env:REPO_ROOT 'Tooling/runner-cli/RunnerCli/RunnerCli.csproj'
-          $runnerCliPath = $env:LVIE_RUNNER_CLI_PATH
-          $runnerCliDll = if (-not [string]::IsNullOrWhiteSpace($runnerCliPath)) { [System.IO.Path]::ChangeExtension($runnerCliPath, '.dll') } else { '' }
-          $useRunnerCliDll = -not [string]::IsNullOrWhiteSpace($runnerCliDll) -and (Test-Path -Path $runnerCliDll -PathType Leaf)
-          if (-not $useRunnerCliDll -and -not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
+          if (-not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
             throw "runner-cli project not found at $runnerCliProject"
+          }
+          & dotnet build $runnerCliProject --configuration Release -nologo /p:UseAppHost=false
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+          $runnerCliDll = Get-ChildItem -Path (Join-Path $env:REPO_ROOT 'Tooling/runner-cli/RunnerCli/bin/Release') -Filter 'runner-cli.dll' -Recurse -File -ErrorAction SilentlyContinue |
+            Sort-Object -Property LastWriteTimeUtc -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+          if ([string]::IsNullOrWhiteSpace($runnerCliDll) -or -not (Test-Path -Path $runnerCliDll -PathType Leaf)) {
+            throw "runner-cli.dll not found under Tooling/runner-cli/RunnerCli/bin/Release after in-place build."
           }
 
           $logPath = Join-Path $env:REPO_ROOT 'builds\status\vipc-remediate-32.log'
@@ -1440,11 +1462,7 @@ jobs:
             '--supported-bitness', '32',
             '--vipc-path', '.github/actions/apply-vipc/runner_dependencies.vipc'
           )
-          if ($useRunnerCliDll) {
-            $output = & dotnet $runnerCliDll @runnerCliArgs *>&1
-          } else {
-            $output = & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs *>&1
-          }
+          $output = & dotnet $runnerCliDll @runnerCliArgs *>&1
           $exitCode = $LASTEXITCODE
 
           if ($output) {
@@ -1463,11 +1481,18 @@ jobs:
         working-directory: ${{ env.REPO_ROOT }}
         run: |
           $runnerCliProject = Join-Path $env:REPO_ROOT 'Tooling/runner-cli/RunnerCli/RunnerCli.csproj'
-          $runnerCliPath = $env:LVIE_RUNNER_CLI_PATH
-          $runnerCliDll = if (-not [string]::IsNullOrWhiteSpace($runnerCliPath)) { [System.IO.Path]::ChangeExtension($runnerCliPath, '.dll') } else { '' }
-          $useRunnerCliDll = -not [string]::IsNullOrWhiteSpace($runnerCliDll) -and (Test-Path -Path $runnerCliDll -PathType Leaf)
-          if (-not $useRunnerCliDll -and -not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
+          if (-not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
             throw "runner-cli project not found at $runnerCliProject"
+          }
+          & dotnet build $runnerCliProject --configuration Release -nologo /p:UseAppHost=false
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+          $runnerCliDll = Get-ChildItem -Path (Join-Path $env:REPO_ROOT 'Tooling/runner-cli/RunnerCli/bin/Release') -Filter 'runner-cli.dll' -Recurse -File -ErrorAction SilentlyContinue |
+            Sort-Object -Property LastWriteTimeUtc -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+          if ([string]::IsNullOrWhiteSpace($runnerCliDll) -or -not (Test-Path -Path $runnerCliDll -PathType Leaf)) {
+            throw "runner-cli.dll not found under Tooling/runner-cli/RunnerCli/bin/Release after in-place build."
           }
 
           $runnerCliArgs = @(
@@ -1477,11 +1502,7 @@ jobs:
             '--vipc-path', '.github/actions/apply-vipc/runner_dependencies.vipc',
             '--output-path', "$env:REPO_ROOT\\builds\\status\\vipc-audit-post-32.json"
           )
-          if ($useRunnerCliDll) {
-            & dotnet $runnerCliDll @runnerCliArgs
-          } else {
-            & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs
-          }
+          & dotnet $runnerCliDll @runnerCliArgs
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
@@ -1549,11 +1570,18 @@ jobs:
         working-directory: ${{ env.REPO_ROOT }}
         run: |
           $runnerCliProject = Join-Path $env:REPO_ROOT 'Tooling/runner-cli/RunnerCli/RunnerCli.csproj'
-          $runnerCliPath = $env:LVIE_RUNNER_CLI_PATH
-          $runnerCliDll = if (-not [string]::IsNullOrWhiteSpace($runnerCliPath)) { [System.IO.Path]::ChangeExtension($runnerCliPath, '.dll') } else { '' }
-          $useRunnerCliDll = -not [string]::IsNullOrWhiteSpace($runnerCliDll) -and (Test-Path -Path $runnerCliDll -PathType Leaf)
-          if (-not $useRunnerCliDll -and -not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
+          if (-not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
             throw "runner-cli project not found at $runnerCliProject"
+          }
+          & dotnet build $runnerCliProject --configuration Release -nologo /p:UseAppHost=false
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+          $runnerCliDll = Get-ChildItem -Path (Join-Path $env:REPO_ROOT 'Tooling/runner-cli/RunnerCli/bin/Release') -Filter 'runner-cli.dll' -Recurse -File -ErrorAction SilentlyContinue |
+            Sort-Object -Property LastWriteTimeUtc -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+          if ([string]::IsNullOrWhiteSpace($runnerCliDll) -or -not (Test-Path -Path $runnerCliDll -PathType Leaf)) {
+            throw "runner-cli.dll not found under Tooling/runner-cli/RunnerCli/bin/Release after in-place build."
           }
 
           $logPath = Join-Path $env:REPO_ROOT 'builds\status\vipc-apply-32.log'
@@ -1569,11 +1597,7 @@ jobs:
             '--supported-bitness', '32',
             '--vipc-path', '.github/actions/apply-vipc/runner_dependencies.vipc'
           )
-          if ($useRunnerCliDll) {
-            $output = & dotnet $runnerCliDll @runnerCliArgs *>&1
-          } else {
-            $output = & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs *>&1
-          }
+          $output = & dotnet $runnerCliDll @runnerCliArgs *>&1
           $exitCode = $LASTEXITCODE
 
           if ($output) {
