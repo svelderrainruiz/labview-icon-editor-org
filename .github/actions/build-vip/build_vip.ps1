@@ -265,6 +265,30 @@ function Get-VipmTargetsSectionInfo {
     }
 }
 
+function Find-LineIndex {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+        [string[]]$Lines,
+        [Parameter(Mandatory = $true)]
+        [string]$Pattern,
+        [Parameter()]
+        [int]$StartIndex = 0
+    )
+
+    if ($StartIndex -lt 0) {
+        $StartIndex = 0
+    }
+
+    for ($index = $StartIndex; $index -lt $Lines.Count; $index++) {
+        if ([regex]::IsMatch([string]$Lines[$index], $Pattern)) {
+            return $index
+        }
+    }
+
+    return -1
+}
+
 function Set-VipmTargetSettingsFromContract {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param(
@@ -388,6 +412,9 @@ function Set-VipmTargetSettingsFromContract {
         $ports.Add('0') | Out-Null
     }
 
+    $linesList = New-Object 'System.Collections.Generic.List[string]'
+    $linesList.AddRange([string[]]$lines)
+
     $updated = $false
     $currentPort = [string]$ports[$targetIndex]
     if ($currentPort -ne $expectedPort.ToString()) {
@@ -401,10 +428,41 @@ function Set-VipmTargetSettingsFromContract {
     $currentTimeout = [int]$sectionInfo.ConnectionTimeoutValue
     if ($currentTimeout -ne $ConnectionTimeoutSeconds) {
         Write-Output ("Updating VIPM Connection Timeout from {0} to {1} seconds." -f $currentTimeout, $ConnectionTimeoutSeconds)
-        $lines[$sectionInfo.ConnectionTimeoutLineIndex] = ('Connection Timeout="{0}"' -f $ConnectionTimeoutSeconds)
+        $linesList[$sectionInfo.ConnectionTimeoutLineIndex] = ('Connection Timeout="{0}"' -f $ConnectionTimeoutSeconds)
         $updated = $true
     } else {
         Write-Output ("VIPM Connection Timeout already set to {0} seconds." -f $currentTimeout)
+    }
+
+    $targetVersionLine = ('Active Target.Version="{0}"' -f $targetVersionLabel)
+    $activeTargetVersionIndex = Find-LineIndex -Lines $linesList.ToArray() -Pattern '^\s*Active Target\.Version\s*='
+    if ($activeTargetVersionIndex -ge 0) {
+        if (-not [string]::Equals([string]$linesList[$activeTargetVersionIndex], $targetVersionLine, [System.StringComparison]::Ordinal)) {
+            Write-Output ("Updating VIPM active target version from '{0}' to '{1}'." -f [string]$linesList[$activeTargetVersionIndex], $targetVersionLabel)
+            $linesList[$activeTargetVersionIndex] = $targetVersionLine
+            $updated = $true
+        }
+    } else {
+        $insertAt = [Math]::Min($sectionInfo.ConnectionTimeoutLineIndex + 1, $linesList.Count)
+        Write-Output ("Adding VIPM active target version '{0}'." -f $targetVersionLabel)
+        $linesList.Insert($insertAt, $targetVersionLine)
+        $updated = $true
+    }
+
+    $targetNameLine = 'Active Target.Name="LabVIEW"'
+    $activeTargetNameIndex = Find-LineIndex -Lines $linesList.ToArray() -Pattern '^\s*Active Target\.Name\s*='
+    if ($activeTargetNameIndex -ge 0) {
+        if (-not [string]::Equals([string]$linesList[$activeTargetNameIndex], $targetNameLine, [System.StringComparison]::Ordinal)) {
+            Write-Output ("Updating VIPM active target name from '{0}' to 'LabVIEW'." -f [string]$linesList[$activeTargetNameIndex])
+            $linesList[$activeTargetNameIndex] = $targetNameLine
+            $updated = $true
+        }
+    } else {
+        $connectionTimeoutIndex = Find-LineIndex -Lines $linesList.ToArray() -Pattern '^\s*Connection Timeout\s*='
+        $insertAt = if ($connectionTimeoutIndex -ge 0) { [Math]::Min($connectionTimeoutIndex + 1, $linesList.Count) } else { $linesList.Count }
+        Write-Output "Adding VIPM active target name 'LabVIEW'."
+        $linesList.Insert($insertAt, $targetNameLine)
+        $updated = $true
     }
 
     if ($updated -and $PSCmdlet.ShouldProcess($settingsPath, 'Synchronize VIPM target port and connection timeout with LabVIEW contract')) {
@@ -414,8 +472,8 @@ function Set-VipmTargetSettingsFromContract {
         } else {
             "<size(s)=0>"
         }
-        $lines[$sectionInfo.PortsLineIndex] = ('Ports="{0}"' -f $portsValue)
-        Set-Content -Path $settingsPath -Value $lines -Encoding utf8
+        $linesList[$sectionInfo.PortsLineIndex] = ('Ports="{0}"' -f $portsValue)
+        Set-Content -Path $settingsPath -Value $linesList.ToArray() -Encoding utf8
         Write-Output ("VIPM settings synchronized to LabVIEW CLI contract: {0}" -f $settingsPath)
     }
 }
