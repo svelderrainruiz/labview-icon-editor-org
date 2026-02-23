@@ -94,5 +94,47 @@
         $licenseSetting | Should -Be ''
         $exclusionPaths | Should -Contain 'TestResults'
     }
+
+    It "accepts DisplayInformationJsonPath to avoid long command arguments" {
+        $vipbPath = Join-Path $script:tempRoot ("fixture_{0}.vipb" -f ([guid]::NewGuid().ToString("N")))
+        Copy-Item -Path $script:fixtureSource -Destination $vipbPath
+
+        $releaseNotesPath = Join-Path $script:tempRoot ("release_notes_{0}.md" -f ([guid]::NewGuid().ToString("N")))
+        Set-Content -Path $releaseNotesPath -Value "Release notes from file" -NoNewline
+
+        $displayInformation = [ordered]@{
+            "Company Name"                 = "svelderrainruiz"
+            "Product Name"                 = "labview-icon-editor"
+            "Product Description Summary"  = "Source for LabVIEW's icon editor"
+            "Product Description"          = "Source for LabVIEW's icon editor"
+            "Author Name (Person or Company)" = "svelderrainruiz/labview-icon-editor"
+            "Product Homepage (URL)"       = "https://github.com/svelderrainruiz/labview-icon-editor"
+            "Legal Copyright"              = "© 2025 svelderrainruiz"
+            "Release Notes - Change Log"   = "Release notes from file"
+            "Package Version"              = @{ major = 1; minor = 4; patch = 1; build = 1194 }
+        }
+        $displayInformationPath = Join-Path $script:tempRoot ("display_info_{0}.json" -f ([guid]::NewGuid().ToString("N")))
+        Set-Content -Path $displayInformationPath -Value ($displayInformation | ConvertTo-Json -Depth 5) -Encoding utf8
+
+        $relativeVipbPath = [System.IO.Path]::GetRelativePath($script:repoRoot, $vipbPath)
+
+        & $script:scriptPath `
+            -SupportedBitness 64 `
+            -RepoRoot $script:repoRoot `
+            -VIPBPath $relativeVipbPath `
+            -LabVIEWVersion 2021 `
+            -LabVIEWMinorRevision 0 `
+            -Major 1 `
+            -Minor 4 `
+            -Patch 1 `
+            -Build 1194 `
+            -Commit "cafebabe" `
+            -ReleaseNotesFile $releaseNotesPath `
+            -DisplayInformationJsonPath $displayInformationPath
+
+        $vipbXml = [xml](Get-Content -Raw -Path $vipbPath)
+        $vipbXml.VI_Package_Builder_Settings.Library_General_Settings.Company_Name | Should -Be "svelderrainruiz"
+        $vipbXml.VI_Package_Builder_Settings.Advanced_Settings.Description.Description | Should -Match "Commit: cafebabe"
+    }
 }
 

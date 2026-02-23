@@ -50,4 +50,10 @@ Describe "Build VIP lock contract" {
         $actionContent | Should -Match "-VipbBuildLockTimeoutSeconds"
         $actionContent | Should -Match "-VipbBuildLockStaleSeconds"
     }
+
+    It "passes display metadata via file path for nested modify script invocation" {
+        $content = Get-Content -Path $script:buildVipScript -Raw
+        $content | Should -Match "vipb-display-information\.json"
+        $content | Should -Match "-DisplayInformationJsonPath"
+    }
 }

@@ -318,6 +318,9 @@ if (-not (Test-Path -Path $modifyVipbScript)) {
 }
 
 $metadataLogFile = Join-Path -Path $LogDirectory -ChildPath "vipb-metadata-update.log"
+$displayInfoTempPath = Join-Path -Path $LogDirectory -ChildPath "vipb-display-information.json"
+Set-Content -Path $displayInfoTempPath -Value $UpdatedDisplayInformationJSON -Encoding utf8
+
 $modifyArgs = @(
     '-NoProfile',
     '-File', $modifyVipbScript,
@@ -332,7 +335,7 @@ $modifyArgs = @(
     '-Build', $Build.ToString(),
     '-Commit', $Commit,
     '-ReleaseNotesFile', $ResolvedReleaseNotesFile.ToString(),
-    '-DisplayInformationJSON', $UpdatedDisplayInformationJSON
+    '-DisplayInformationJsonPath', $displayInfoTempPath
 )
 if (-not [string]::IsNullOrWhiteSpace($WorktreeRoot)) {
     $modifyArgs += @('-WorktreeRoot', $WorktreeRoot)
