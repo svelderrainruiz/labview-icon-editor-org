@@ -336,7 +336,7 @@ function Invoke-PrepareLabviewSource {
         '--connect-timeout-ms', [string]$ConnectTimeoutMs,
         '--process-timeout-ms', [string]$ProcessTimeoutMs
     )
-    & pwsh -NoProfile -File (Join-Path $resolvedRepoRoot 'Tooling\Invoke-RunnerCli.ps1') -RunnerCliProject $runnerCliProject -RunnerCliArgs $runnerCliArgs
+    & (Join-Path $resolvedRepoRoot 'Tooling\Invoke-RunnerCli.ps1') -RunnerCliProject $runnerCliProject -RunnerCliArgs $runnerCliArgs
 
     if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {
         throw "runner-cli dev-mode prepare-source failed for $Bitness-bit with exit code $LASTEXITCODE."
@@ -355,4 +355,5 @@ catch {
     Write-Error "An unexpected error occurred during script execution: $($_.Exception.Message)"
     exit 1
 }
+
 
