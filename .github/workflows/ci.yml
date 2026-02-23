@@ -1206,7 +1206,11 @@ jobs:
             '--vipc-path', '.github/actions/apply-vipc/runner_dependencies.vipc',
             '--output-path', $precheckOutputPath
           )
-          & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs
+          $runnerCliPath = $env:LVIE_RUNNER_CLI_PATH
+          if ([string]::IsNullOrWhiteSpace($runnerCliPath) -or -not (Test-Path -Path $runnerCliPath -PathType Leaf)) {
+            throw "runner-cli executable not found at '$runnerCliPath'."
+          }
+          & $runnerCliPath @runnerCliArgs
       - name: Test Source Using LV ${{ matrix.bitness }}-bit
         id: source_test
         shell: pwsh
@@ -1453,7 +1457,11 @@ jobs:
             $runnerCliArgs += '--verbose-gcli'
           }
           $lunitStartUtc = (Get-Date).ToUniversalTime()
-          $output = & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs *>&1
+          $runnerCliPath = $env:LVIE_RUNNER_CLI_PATH
+          if ([string]::IsNullOrWhiteSpace($runnerCliPath) -or -not (Test-Path -Path $runnerCliPath -PathType Leaf)) {
+            throw "runner-cli executable not found at '$runnerCliPath'."
+          }
+          $output = & $runnerCliPath @runnerCliArgs *>&1
           $runnerCliExitCode = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
           $buildServerShutdownAfterExitCode = Invoke-DotnetBuildServerShutdown -Phase 'post-lunit'
           if ($output) {
@@ -1768,7 +1776,11 @@ jobs:
             '--build', '${{ needs.version.outputs.BUILD }}',
             '--commit', '${{ github.sha }}'
           )
-          & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs
+          $runnerCliPath = $env:LVIE_RUNNER_CLI_PATH
+          if ([string]::IsNullOrWhiteSpace($runnerCliPath) -or -not (Test-Path -Path $runnerCliPath -PathType Leaf)) {
+            throw "runner-cli executable not found at '$runnerCliPath'."
+          }
+          & $runnerCliPath @runnerCliArgs
           $runnerCliExitCode = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
           Write-Host ("runner-cli ppl build exit code: {0}" -f $runnerCliExitCode)
           exit $runnerCliExitCode
@@ -1881,7 +1893,11 @@ jobs:
             '--build', '${{ needs.version.outputs.BUILD }}',
             '--commit', '${{ github.sha }}'
           )
-          & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs
+          $runnerCliPath = $env:LVIE_RUNNER_CLI_PATH
+          if ([string]::IsNullOrWhiteSpace($runnerCliPath) -or -not (Test-Path -Path $runnerCliPath -PathType Leaf)) {
+            throw "runner-cli executable not found at '$runnerCliPath'."
+          }
+          & $runnerCliPath @runnerCliArgs
           $runnerCliExitCode = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
           Write-Host ("runner-cli ppl build exit code: {0}" -f $runnerCliExitCode)
           exit $runnerCliExitCode
@@ -2140,7 +2156,7 @@ jobs:
           if ($usePrebuiltRunnerCli) {
             & $runnerCliPath @runnerCliArgs
           } else {
-            & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs
+            throw "runner-cli unavailable: expected prebuilt executable via LVIE_RUNNER_CLI_PATH for self-hosted lane."
           }
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
