@@ -96,8 +96,7 @@ public static class VipcService
         AddValueArg(args, "-LabVIEWVersion", options.LabviewVersion);
         if (!options.FailOnMismatch)
         {
-            args.Add("-FailOnMismatch");
-            args.Add("false");
+            args.Add("-FailOnMismatch:$false");
         }
 
         return PowerShellScriptRunner.Run(
