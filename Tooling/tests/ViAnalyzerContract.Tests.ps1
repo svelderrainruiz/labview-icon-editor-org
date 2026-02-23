@@ -121,10 +121,21 @@ Describe 'VI Analyzer contract' {
         (Test-Path -LiteralPath $script:runViAnalyzerPath -PathType Leaf) | Should -BeTrue
 
         $content = Get-Content -Raw -Path $script:runViAnalyzerPath
+        $content | Should -Match '\[int\]\$MaxAttempts\s*=\s*3'
+        $content | Should -Match '\[int\]\$RetryDelaySeconds\s*=\s*5'
+        $content | Should -Match 'function Test-ViAnalyzerTransientCliFailure'
+        $content | Should -Match 'You cannot initialize the logger multiple times'
+        $content | Should -Match 'failed to establish a connection with LabVIEW'
+        $content | Should -Match 'Call By Reference in RunExecuteOperationVI'
+        $content | Should -Match 'function Invoke-CloseLabVIEWSafely'
+        $content | Should -Match 'Retrying VI Analyzer task'
+        $content | Should -Match 'Transient LabVIEWCLI failure detected'
         $content | Should -Match 'Resolve-LabVIEWCliPortFromContract'
         $content | Should -Match 'LVIE_REMEDIATE_LABVIEWCLI_PORT_CONTRACT'
         $content | Should -Match '-EnableRemediation:\$portRemediationEnabled'
         $content | Should -Match 'RunVIAnalyzer'
+        $content | Should -Match 'attempts'
+        $content | Should -Match 'transient_failure_detected'
         $content | Should -Match 'analyzed_total'
         $content | Should -Match 'No tests were analyzed'
         $content | Should -Match 'Failed Tests'

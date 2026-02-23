@@ -68,7 +68,7 @@ if (Test-Path -Path $versionHelper) {
     $env:LABVIEW_MINOR_REVISION = $versionInfo.MinorRevision.ToString()
     $env:LABVIEW_NUMERIC_VERSION = $versionInfo.NumericVersion
 } elseif ([string]::IsNullOrWhiteSpace($LabVIEWVersion)) {
-    $LabVIEWVersion = '2021'
+    $LabVIEWVersion = '2020'
 }
 
 $env:LABVIEW_VERSION = $LabVIEWVersion
@@ -82,6 +82,14 @@ if ($PSBoundParameters.ContainsKey('RunDevModeTests')) {
         Remove-Item Env:RUN_DEV_MODE_TESTS -ErrorAction SilentlyContinue
     }
 }
+
+$pesterBootstrapPath = Join-Path $repoRoot 'Tooling\support\PesterBootstrap.ps1'
+if (-not (Test-Path -LiteralPath $pesterBootstrapPath -PathType Leaf)) {
+    throw "Pester bootstrap helper not found: $pesterBootstrapPath"
+}
+. $pesterBootstrapPath
+$pesterInfo = Import-RepoPester -RepoRoot $repoRoot -MinimumVersion ([version]'5.0.0') -AllowInstallFromGallery
+Write-Host ("Using Pester {0} from {1}" -f $pesterInfo.Version, $pesterInfo.ModuleBase)
 
 $configuration = New-PesterConfiguration
 $additionalContractTests = @(
@@ -100,9 +108,23 @@ if ($CI) {
         New-Item -Path $resultsDir -ItemType Directory | Out-Null
     }
 
+    $pesterRunTokenParts = @()
+    if (-not [string]::IsNullOrWhiteSpace($RunId)) {
+        $sanitizedRunId = ($RunId -replace '[^A-Za-z0-9._-]', '-')
+        if (-not [string]::IsNullOrWhiteSpace($sanitizedRunId)) {
+            $pesterRunTokenParts += $sanitizedRunId
+        }
+    }
+    $pesterRunTokenTimestamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
+    $pesterRunTokenParts += $LabVIEWVersion
+    $pesterRunTokenParts += $LabVIEWBitness
+    $pesterRunTokenParts += $pesterRunTokenTimestamp
+    $pesterRunTokenParts += $PID
+    $pesterRunToken = ($pesterRunTokenParts -join '-')
+
     $configuration.TestResult.Enabled = $true
     $configuration.TestResult.OutputFormat = 'NUnitXml'
-    $configuration.TestResult.OutputPath = (Join-Path $resultsDir ("pester-devmode-$LabVIEWVersion-$LabVIEWBitness.xml"))
+    $configuration.TestResult.OutputPath = (Join-Path $resultsDir ("pester-devmode-{0}.xml" -f $pesterRunToken))
 }
 
 $exitCode = 0
