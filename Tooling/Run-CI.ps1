@@ -1604,7 +1604,7 @@ function Invoke-RunnerCliCommand {
     }
 
     Write-Host ("{0}: runner-cli in-place ({1}) -- {2}" -f $Label, (Format-RunnerCliArgument -Value $runnerCliProject), (($Arguments | ForEach-Object { Format-RunnerCliArgument -Value $_ }) -join ' '))
-    & pwsh -NoProfile -File (Join-Path $RepoRoot 'Tooling\Invoke-RunnerCli.ps1') -RunnerCliProject $runnerCliProject -- @Arguments
+    & pwsh -NoProfile -File (Join-Path $RepoRoot 'Tooling\Invoke-RunnerCli.ps1') -RunnerCliProject $runnerCliProject -RunnerCliArgs $Arguments
 }
 
 function Initialize-RunnerContractIfNeeded {

@@ -42,6 +42,6 @@ if (-not (Test-Path -Path $runnerCliDll -PathType Leaf)) {
 
 & dotnet $runnerCliDll @RunnerCliArgs
 $exitCode = $LASTEXITCODE
-if ($exitCode -ne $null) {
+if ($null -ne $exitCode) {
     exit $exitCode
 }
