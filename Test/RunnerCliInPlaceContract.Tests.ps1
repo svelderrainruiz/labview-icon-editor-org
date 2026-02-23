@@ -64,4 +64,15 @@ Describe "Runner CLI in-place contract" {
         $script:ciWorkflow | Should -Match 'Build PPL \(LV \${{\s*needs\.version-gate\.outputs\.raw\s*}}\s+x86\)'
         $script:ciWorkflow | Should -Match 'Build PPL \(LV \${{\s*needs\.version-gate\.outputs\.raw\s*}}\s+x64\)'
     }
+
+    It "uploads source-test reports and lunit logs on every run" {
+        $script:ciWorkflow | Should -Match '(?ms)- name:\s*Upload unit test report \(LV \${{\s*matrix\.bitness\s*}}-bit\)\s*if:\s*always\(\)'
+        $script:ciWorkflow | Should -Match '(?ms)- name:\s*Upload unit test report legacy alias \(LV \${{\s*matrix\.bitness\s*}}-bit\)\s*if:\s*always\(\)'
+        $script:ciWorkflow | Should -Match '(?ms)- name:\s*Upload lunit run log \(LV \${{\s*matrix\.bitness\s*}}-bit\)\s*if:\s*always\(\)'
+    }
+
+    It "records pre-close retry telemetry in source-test evidence and summary" {
+        $script:ciWorkflow | Should -Match 'pre_close_attempts\s*=\s*@\(\$preCloseAttempts\)'
+        $script:ciWorkflow | Should -Match 'Pre-close telemetry \(LV \{0\}-bit\): exit_code=\{1\}; attempts=\{2\}'
+    }
 }

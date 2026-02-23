@@ -1700,22 +1700,50 @@ jobs:
 
           $closeScriptPath = Join-Path $env:REPO_ROOT '.github/actions/close-labview/Close_LabVIEW.ps1'
           $preCloseExitCode = $null
+          $preCloseAttempts = @()
           if (Test-Path -Path $closeScriptPath -PathType Leaf) {
-            try {
-              $closeOutput = & pwsh -NoProfile -File $closeScriptPath -LabVIEWVersion $unitTestYear -SupportedBitness $requestedBitness -TimeoutSeconds 120 2>&1
-              $preCloseExitCode = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
-              foreach ($line in @($closeOutput | ForEach-Object { $_.ToString() })) {
-                Write-Host $line
+            foreach ($attempt in 1..2) {
+              $attemptUtc = (Get-Date).ToUniversalTime().ToString('o')
+              try {
+                $closeOutput = & pwsh -NoProfile -File $closeScriptPath -LabVIEWVersion $unitTestYear -SupportedBitness $requestedBitness -TimeoutSeconds 120 2>&1
+                $preCloseExitCode = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+                foreach ($line in @($closeOutput | ForEach-Object { $_.ToString() })) {
+                  Write-Host $line
+                }
+                $preCloseAttempts += [ordered]@{
+                  attempt = $attempt
+                  timestamp_utc = $attemptUtc
+                  exit_code = $preCloseExitCode
+                }
+                if ($preCloseExitCode -eq 0) {
+                  break
+                }
+                Write-Warning ("Pre-run LabVIEW close attempt {0} returned nonzero exit code: {1}" -f $attempt, $preCloseExitCode)
+              } catch {
+                $preCloseExitCode = 1
+                $preCloseAttempts += [ordered]@{
+                  attempt = $attempt
+                  timestamp_utc = $attemptUtc
+                  exit_code = $preCloseExitCode
+                  error = $_.Exception.Message
+                }
+                Write-Warning ("Pre-run LabVIEW close attempt {0} failed: {1}" -f $attempt, $_.Exception.Message)
               }
-              if ($preCloseExitCode -ne 0) {
-                Write-Warning ("Pre-run LabVIEW close returned nonzero exit code: {0}" -f $preCloseExitCode)
+              if ($attempt -lt 2 -and $preCloseExitCode -ne 0) {
+                Start-Sleep -Seconds 2
               }
-            } catch {
-              $preCloseExitCode = 1
-              Write-Warning ("Pre-run LabVIEW close failed: {0}" -f $_.Exception.Message)
+            }
+            if ($preCloseExitCode -ne 0 -and $preCloseAttempts.Count -gt 0) {
+              Write-Warning ("Pre-run LabVIEW close telemetry: {0}" -f (($preCloseAttempts | ConvertTo-Json -Depth 4 -Compress)))
             }
           } else {
             Write-Warning ("Close_LabVIEW script not found at {0}" -f $closeScriptPath)
+            $preCloseAttempts += [ordered]@{
+              attempt = 0
+              timestamp_utc = (Get-Date).ToUniversalTime().ToString('o')
+              exit_code = -1
+              error = 'script_not_found'
+            }
           }
 
           $buildServerShutdownBeforeExitCode = Invoke-DotnetBuildServerShutdown -Phase 'pre-lunit'
@@ -1907,6 +1935,7 @@ jobs:
             verbose_gcli_enabled = $verboseGcli
             lunit_log_path = $lunitLogPath
             pre_close_exit_code = $preCloseExitCode
+            pre_close_attempts = @($preCloseAttempts)
             dotnet_build_server_shutdown_pre_exit_code = $buildServerShutdownBeforeExitCode
             dotnet_build_server_shutdown_post_exit_code = $buildServerShutdownAfterExitCode
             labview_temp_log_dir = $labviewTempLogDir
@@ -1925,6 +1954,7 @@ jobs:
 
           if ($env:GITHUB_STEP_SUMMARY) {
             Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ("- Source Test Evidence (LV {0}-bit): mode={1}; verdict={2}; testcase_count={3}; runner_cli={4}; gcli={5}; parser={6}; install_detected_requested_bitness={7}; target_year={8}; source_year={9}; lv2020_compat_mapping={10}" -f $requestedBitness, $sourceTestMode, $verdict, $testcaseCount, $runnerCliExitCode, $gcliExitCode, $parserExitCode, $requestedInstallDetected, $unitTestYear, $unitTestYearSourceContract, $yearCompatMappingApplied)
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ("- Pre-close telemetry (LV {0}-bit): exit_code={1}; attempts={2}" -f $requestedBitness, $preCloseExitCode, $preCloseAttempts.Count)
           }
           if ($env:GITHUB_OUTPUT) {
             "source_test_verdict=$verdict" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
@@ -1957,21 +1987,21 @@ jobs:
           $summaryLine = "- Unit Tests (LV {0}-bit): runner={1}; mode={2}; LUnit executor=runner-cli (g-cli backend); target_year={3}; source_year={4}; lv2020_compat_mapping={5}" -f '${{ matrix.bitness }}', '${{ runner.name }}', '${{ steps.source_test.outputs.source_test_mode_effective }}', '${{ steps.source_test.outputs.source_test_year }}', '${{ steps.source_test.outputs.source_test_year_source_contract }}', '${{ steps.source_test.outputs.source_test_year_compat_mapping_applied }}'
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $summaryLine
       - name: Upload unit test report (LV ${{ matrix.bitness }}-bit)
-        if: ${{ failure() || steps.source_test.outputs.source_test_verdict == 'fail' }}
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: unit-tests-${{ runner.os }}-${{ matrix.bitness }}-bit-report
           path: ${{ env.REPO_ROOT }}/.github/actions/run-unit-tests/UnitTestReport-${{ runner.os }}-${{ matrix.bitness }}.xml
           if-no-files-found: warn
       - name: Upload unit test report legacy alias (LV ${{ matrix.bitness }}-bit)
-        if: ${{ failure() || steps.source_test.outputs.source_test_verdict == 'fail' }}
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: unit-tests-${{ runner.os }}-${{ matrix.bitness }}-bit-report-legacy
           path: ${{ env.REPO_ROOT }}/.github/actions/run-unit-tests/UnitTestReport.xml
           if-no-files-found: warn
       - name: Upload lunit run log (LV ${{ matrix.bitness }}-bit)
-        if: ${{ failure() || steps.source_test.outputs.source_test_verdict == 'fail' }}
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: lunit-run-${{ runner.os }}-${{ matrix.bitness }}-bit-log
