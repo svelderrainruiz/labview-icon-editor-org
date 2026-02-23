@@ -28,6 +28,9 @@ runs:
         $contractPath = Join-Path $env:RUNNER_WORKSPACE 'lvie' 'runner-contract.json'
         $runnerCliProject = Join-Path $env:GITHUB_WORKSPACE 'Tooling\runner-cli\RunnerCli\RunnerCli.csproj'
         $runnerCliDll = Join-Path $env:GITHUB_WORKSPACE 'Tooling\runner-cli\RunnerCli\bin\Release\net8.0\runner-cli.dll'
+        $runnerLabel = if ([string]::IsNullOrWhiteSpace($env:LVIE_EXPECTED_RUNNER_LABEL)) { $env:LVIE_RUNNER_LABEL } else { $env:LVIE_EXPECTED_RUNNER_LABEL }
+        if ([string]::IsNullOrWhiteSpace($runnerLabel)) { $runnerLabel = 'self-hosted-windows-lv' }
+        $canonicalLabel = if ([string]::IsNullOrWhiteSpace($env:LVIE_CANONICAL_RUNNER_LABEL)) { 'self-hosted-windows-lv' } else { $env:LVIE_CANONICAL_RUNNER_LABEL }
         $runnerCliReady = $false
 
         if ((Test-Path -Path $runnerCliProject) -and (Get-Command dotnet -ErrorAction SilentlyContinue)) {
@@ -45,7 +48,9 @@ runs:
           & dotnet $runnerCliDll init-contract `
             --contract-path $contractPath `
             --runner-root   (Split-Path $env:RUNNER_WORKSPACE) `
-            --work-root     $env:RUNNER_WORKSPACE
+            --work-root     $env:RUNNER_WORKSPACE `
+            --runner-label  $runnerLabel `
+            --canonical-label $canonicalLabel
           if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {
             throw ("runner-cli init-contract failed (exit {0})." -f $LASTEXITCODE)
           }

@@ -28,8 +28,12 @@ Describe "Runner CLI in-place contract" {
 
     It "builds and invokes runner-cli in place via dotnet" {
         $script:runnerBootstrap | Should -Match 'dotnet build \$runnerCliProject --configuration Release /p:SelfContained=false /p:UseAppHost=false'
+        $script:runnerBootstrap | Should -Match '\$runnerLabel = if \(\[string\]::IsNullOrWhiteSpace\(\$env:LVIE_EXPECTED_RUNNER_LABEL\)\)'
+        $script:runnerBootstrap | Should -Match '\$canonicalLabel = if \(\[string\]::IsNullOrWhiteSpace\(\$env:LVIE_CANONICAL_RUNNER_LABEL\)\)'
         $script:runnerBootstrap | Should -Match 'runner-cli\.dll'
         $script:runnerBootstrap | Should -Match '& dotnet \$runnerCliDll init-contract'
+        $script:runnerBootstrap | Should -Match '--runner-label\s+\$runnerLabel'
+        $script:runnerBootstrap | Should -Match '--canonical-label\s+\$canonicalLabel'
         $script:runnerBootstrap | Should -Match '& dotnet \$runnerCliDll emit-env'
         $script:runnerBootstrap | Should -Not -Match 'RUNNER_TEMP.*runner-cli\.exe'
     }
