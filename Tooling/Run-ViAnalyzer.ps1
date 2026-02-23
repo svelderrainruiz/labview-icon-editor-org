@@ -30,7 +30,15 @@ param(
     [string]$ReportsRoot = 'builds/vi-analyzer',
 
     [Parameter(Mandatory = $false)]
-    [string]$StatusPath = 'builds/status/vi-analyzer-summary.json'
+    [string]$StatusPath = 'builds/status/vi-analyzer-summary.json',
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(1, 5)]
+    [int]$MaxAttempts = 2,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(0, 120)]
+    [int]$RetryDelaySeconds = 5
 )
 
 $ErrorActionPreference = 'Stop'
@@ -348,6 +356,66 @@ function Add-ViAnalyzerSummary {
     Add-Content -Path $SummaryPath -Value ($lines -join [Environment]::NewLine)
 }
 
+function Test-ViAnalyzerTransientCliFailure {
+    param(
+        [int]$ExitCode,
+        [string[]]$OutputLines
+    )
+
+    if ($ExitCode -eq 0) {
+        return $false
+    }
+
+    $text = if ($OutputLines -and $OutputLines.Count -gt 0) {
+        $OutputLines -join [Environment]::NewLine
+    } else {
+        ''
+    }
+
+    if ([string]::IsNullOrWhiteSpace($text)) {
+        return $false
+    }
+
+    $transientPatterns = @(
+        'Error code\s*:\s*-350052',
+        'You cannot initialize the logger multiple times',
+        'Error code\s*:\s*-350000',
+        'failed to establish a connection with LabVIEW'
+    )
+
+    foreach ($pattern in $transientPatterns) {
+        if ($text -match $pattern) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
+function Invoke-CloseLabVIEWSafely {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot,
+        [Parameter(Mandatory = $true)]
+        [string]$LabVIEWVersion,
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('32', '64')]
+        [string]$Bitness
+    )
+
+    $closeScript = Join-Path -Path $RepoRoot -ChildPath '.github\actions\close-labview\Close_LabVIEW.ps1'
+    if (-not (Test-Path -Path $closeScript -PathType Leaf)) {
+        Write-Warning ("Close_LabVIEW.ps1 not found at {0}. Continuing without close attempt." -f $closeScript)
+        return
+    }
+
+    try {
+        & $closeScript -LabVIEWVersion $LabVIEWVersion -SupportedBitness $Bitness | Out-Null
+    } catch {
+        Write-Warning ("Close_LabVIEW.ps1 failed: {0}" -f $_.Exception.Message)
+    }
+}
+
 $resolvedRepoRoot = Resolve-RepoRootPath -PathOverride $RepoRoot
 $tasksPathResolved = Resolve-PathFromRoot -Root $resolvedRepoRoot -Path $TasksPath
 $reportsRootResolved = Resolve-PathFromRoot -Root $resolvedRepoRoot -Path $ReportsRoot
@@ -440,29 +508,55 @@ foreach ($task in $tasks) {
 
     Write-Host ""
     Write-Host ("=== VI Analyzer task: {0} ===" -f $taskId)
-    $start = Get-Date
-    $cliArgs = @(
-        '-OperationName', 'RunVIAnalyzer',
-        '-LabVIEWPath', $labviewExecutablePath,
-        '-PortNumber', $portResolution.PortNumber.ToString(),
-        '-ConfigPath', $configPathResolved,
-        '-ReportPath', $reportPath,
-        '-ReportSaveType', 'ASCII',
-        '-LogToConsole', 'TRUE',
-        '-Headless'
-    )
-
-    $rawOutput = & $labviewCliCommand.Source @cliArgs 2>&1
-    $exitCode = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+    $attemptCount = 0
     $outputLines = @()
-    foreach ($entry in @($rawOutput)) {
-        if ($null -ne $entry) {
-            $line = [string]$entry
-            $outputLines += $line
-            Write-Host $line
+    $exitCode = 0
+    $durationMs = 0
+    $transientFailureDetected = $false
+    $completed = $false
+    while (-not $completed) {
+        $attemptCount += 1
+        if ($attemptCount -gt 1) {
+            Write-Warning ("Retrying VI Analyzer task '{0}' (attempt {1}/{2}) after transient failure." -f $taskId, $attemptCount, $MaxAttempts)
+            Invoke-CloseLabVIEWSafely -RepoRoot $resolvedRepoRoot -LabVIEWVersion $resolvedLabVIEWYear -Bitness $SupportedBitness
+            if ($RetryDelaySeconds -gt 0) {
+                Start-Sleep -Seconds $RetryDelaySeconds
+            }
+        }
+
+        $start = Get-Date
+        $cliArgs = @(
+            '-OperationName', 'RunVIAnalyzer',
+            '-LabVIEWPath', $labviewExecutablePath,
+            '-PortNumber', $portResolution.PortNumber.ToString(),
+            '-ConfigPath', $configPathResolved,
+            '-ReportPath', $reportPath,
+            '-ReportSaveType', 'ASCII',
+            '-LogToConsole', 'TRUE',
+            '-Headless'
+        )
+
+        $rawOutput = & $labviewCliCommand.Source @cliArgs 2>&1
+        $exitCode = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+        $outputLines = @()
+        foreach ($entry in @($rawOutput)) {
+            if ($null -ne $entry) {
+                $line = [string]$entry
+                $outputLines += $line
+                Write-Host $line
+            }
+        }
+        $durationMs = [int][Math]::Round(((Get-Date) - $start).TotalMilliseconds)
+
+        $transientFailureDetected = Test-ViAnalyzerTransientCliFailure -ExitCode $exitCode -OutputLines $outputLines
+        if ($exitCode -eq 0) {
+            $completed = $true
+        } elseif ($transientFailureDetected -and $attemptCount -lt $MaxAttempts) {
+            Write-Warning ("Transient LabVIEWCLI failure detected for task '{0}' (exit {1}); retrying." -f $taskId, $exitCode)
+        } else {
+            $completed = $true
         }
     }
-    $durationMs = [int][Math]::Round(((Get-Date) - $start).TotalMilliseconds)
 
     $cliCounts = Get-LabVIEWCliSummaryCount -Lines $outputLines
     $reportText = Get-ViAnalyzerReportText -ReportPath $reportPath
@@ -523,9 +617,11 @@ foreach ($task in $tasks) {
             config_path     = $configPathResolved
             report_path     = $reportPath
             exit_code       = $exitCode
+            attempts        = $attemptCount
             duration_ms     = $durationMs
             succeeded       = $taskSucceeded
             counts          = [pscustomobject]$counts
+            transient_failure_detected = $transientFailureDetected
             failure_reasons = @($failureReasons)
             failure_items   = @($failureItems)
             failure_file_paths = @($failureFilePaths)
