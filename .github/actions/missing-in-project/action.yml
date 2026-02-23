@@ -183,7 +183,7 @@ runs:
             $runnerCliArgs += $lvInput
           }
           if ($canUseRunnerCliInPlace) {
-            & pwsh -NoProfile -File $runnerCliInvoker -RunnerCliProject $runnerCliProject -- @runnerCliArgs
+            & $runnerCliInvoker -RunnerCliProject $runnerCliProject -RunnerCliArgs $runnerCliArgs
           } else {
             if ($useRunnerCliBinary -and -not $IsWindows) {
               chmod +x $runnerCliPath

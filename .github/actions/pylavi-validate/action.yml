@@ -155,7 +155,7 @@ runs:
             $scanArgs += '--report-only'
           }
           if ($canUseRunnerCliInPlace) {
-            & pwsh -NoProfile -File $runnerCliInvoker -RunnerCliProject $runnerCliProject -- @scanArgs
+            & $runnerCliInvoker -RunnerCliProject $runnerCliProject -RunnerCliArgs $scanArgs
           } else {
             if ($useRunnerCliBinary -and -not $IsWindows) {
               chmod +x $runnerCliPath
@@ -187,7 +187,7 @@ runs:
               $summaryArgs += '--fail-on-delta'
             }
             if ($canUseRunnerCliInPlace) {
-              & pwsh -NoProfile -File $runnerCliInvoker -RunnerCliProject $runnerCliProject -- @summaryArgs | Out-Host
+              & $runnerCliInvoker -RunnerCliProject $runnerCliProject -RunnerCliArgs $summaryArgs | Out-Host
             } else {
               if ($runnerCliPath -like '*.dll') {
                 & dotnet $runnerCliPath @summaryArgs | Out-Host
