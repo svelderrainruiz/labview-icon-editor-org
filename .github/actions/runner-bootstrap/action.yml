@@ -24,19 +24,38 @@ runs:
       if: ${{ inputs.initialize_runner == 'true' }}
       shell: pwsh
       run: |
-        # Try CLI first, fall back to PowerShell
-        $cliName = if ($IsWindows) { 'runner-cli.exe' } else { 'runner-cli' }
-        $cli = Join-Path $env:RUNNER_TEMP 'runner-cli' $cliName
-        if (Test-Path $cli) {
-          Write-Host 'Using runner-cli to initialize contract …'
-          $contractPath = Join-Path $env:RUNNER_WORKSPACE 'lvie' 'runner-contract.json'
-          & $cli init-contract `
+        $ErrorActionPreference = 'Stop'
+        $contractPath = Join-Path $env:RUNNER_WORKSPACE 'lvie' 'runner-contract.json'
+        $runnerCliProject = Join-Path $env:GITHUB_WORKSPACE 'Tooling\runner-cli\RunnerCli\RunnerCli.csproj'
+        $runnerCliDll = Join-Path $env:GITHUB_WORKSPACE 'Tooling\runner-cli\RunnerCli\bin\Release\net8.0\runner-cli.dll'
+        $runnerCliReady = $false
+
+        if ((Test-Path -Path $runnerCliProject) -and (Get-Command dotnet -ErrorAction SilentlyContinue)) {
+          Write-Host 'Building runner-cli in place (framework-dependent DLL) ...'
+          & dotnet build $runnerCliProject --configuration Release /p:SelfContained=false /p:UseAppHost=false
+          if (($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq $null) -and (Test-Path -Path $runnerCliDll)) {
+            $runnerCliReady = $true
+          } else {
+            Write-Warning ("In-place runner-cli build did not produce expected DLL: {0}" -f $runnerCliDll)
+          }
+        }
+
+        if ($runnerCliReady) {
+          Write-Host ("Using in-place runner-cli DLL at {0}" -f $runnerCliDll)
+          & dotnet $runnerCliDll init-contract `
             --contract-path $contractPath `
             --runner-root   (Split-Path $env:RUNNER_WORKSPACE) `
             --work-root     $env:RUNNER_WORKSPACE
-          & $cli emit-env --contract-path $contractPath
+          if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {
+            throw ("runner-cli init-contract failed (exit {0})." -f $LASTEXITCODE)
+          }
+
+          & dotnet $runnerCliDll emit-env --contract-path $contractPath
+          if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {
+            throw ("runner-cli emit-env failed (exit {0})." -f $LASTEXITCODE)
+          }
         } else {
-          Write-Host 'runner-cli not found; using PowerShell fallback.'
+          Write-Host 'runner-cli in-place build unavailable; using PowerShell fallback.'
           pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\Tooling\Initialize-Runner.ps1" -WriteGitHubEnv
         }
     - name: Runner sanity
