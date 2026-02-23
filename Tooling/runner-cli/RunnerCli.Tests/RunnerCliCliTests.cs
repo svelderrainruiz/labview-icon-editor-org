@@ -855,6 +855,20 @@ public class RunnerCliCliTests
     }
 
     [Fact]
+    public void Vipc_assert_dry_run_fail_on_mismatch_false_uses_boolean_switch_syntax()
+    {
+        var repoRoot = FindRepoRoot();
+        var outputPath = Path.Combine(repoRoot, "builds", "status", "vipc-audit-64.json");
+        var args = $"vipc assert --repo-root \"{repoRoot}\" --supported-bitness 64 --vipc-path \".github/actions/apply-vipc/runner_dependencies.vipc\" --output-path \"{outputPath}\" --fail-on-mismatch false --dry-run";
+        var (exitCode, stdout, stderr) = RunCli(repoRoot, args);
+
+        Assert.Equal(0, exitCode);
+        Assert.True(string.IsNullOrWhiteSpace(stdout), $"stdout: {stdout}");
+        Assert.Contains("vipc assert command:", stderr, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("-FailOnMismatch:$false", stderr, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Vipc_apply_dry_run_emits_apply_vipc_command()
     {
         var repoRoot = FindRepoRoot();
