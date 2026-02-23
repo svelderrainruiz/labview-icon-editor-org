@@ -30,7 +30,7 @@ if (-not $SkipBuild.IsPresent) {
         '-p:UseAppHost=false'
     )
     & dotnet @buildArgs | Out-Host
-    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {
+    if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) {
         throw ("runner-cli build failed with exit code {0}." -f $LASTEXITCODE)
     }
 }
@@ -42,6 +42,7 @@ if (-not (Test-Path -Path $runnerCliDll -PathType Leaf)) {
 
 & dotnet $runnerCliDll @RunnerCliArgs
 $exitCode = $LASTEXITCODE
-if ($exitCode -ne $null) {
+if ($null -ne $exitCode) {
     exit $exitCode
 }
+
