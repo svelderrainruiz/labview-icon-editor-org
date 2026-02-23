@@ -29,11 +29,23 @@ runs:
         $cli = Join-Path $env:RUNNER_TEMP 'runner-cli' $cliName
         if (Test-Path $cli) {
           Write-Host 'Using runner-cli to initialize contract …'
+          $expectedRunnerLabel = if ([string]::IsNullOrWhiteSpace($env:LVIE_EXPECTED_RUNNER_LABEL)) {
+            'self-hosted-windows-lv'
+          } else {
+            $env:LVIE_EXPECTED_RUNNER_LABEL.Trim()
+          }
+          $canonicalRunnerLabel = if ([string]::IsNullOrWhiteSpace($env:LVIE_CANONICAL_RUNNER_LABEL)) {
+            'self-hosted-windows-lv'
+          } else {
+            $env:LVIE_CANONICAL_RUNNER_LABEL.Trim()
+          }
           $contractPath = Join-Path $env:RUNNER_WORKSPACE 'lvie' 'runner-contract.json'
           & $cli init-contract `
             --contract-path $contractPath `
             --runner-root   (Split-Path $env:RUNNER_WORKSPACE) `
-            --work-root     $env:RUNNER_WORKSPACE
+            --work-root     $env:RUNNER_WORKSPACE `
+            --runner-label  $expectedRunnerLabel `
+            --canonical-label $canonicalRunnerLabel
           & $cli emit-env --contract-path $contractPath
         } else {
           Write-Host 'runner-cli not found; using PowerShell fallback.'
