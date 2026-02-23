@@ -837,7 +837,6 @@ jobs:
           create_worktree: 'true'
           worktree_root_mode: runner_temp
       - name: Audit VIPC apply (LV x64)
-        id: vipc_audit
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
         run: |
@@ -846,156 +845,24 @@ jobs:
             throw "runner-cli project not found at $runnerCliProject"
           }
 
-          $auditPath = "$env:REPO_ROOT\\builds\\status\\vipc-audit-64.json"
           $runnerCliArgs = @(
             'vipc', 'assert',
             '--repo-root', $env:REPO_ROOT,
             '--supported-bitness', '64',
             '--vipc-path', '.github/actions/apply-vipc/runner_dependencies.vipc',
-            '--output-path', $auditPath,
-            '--fail-on-mismatch', 'false'
+            '--output-path', "$env:REPO_ROOT\\builds\\status\\vipc-audit-64.json"
           )
           & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs
-          if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
-          }
-
-          if (-not (Test-Path -LiteralPath $auditPath -PathType Leaf)) {
-            throw "VIPC audit report was not produced at $auditPath"
-          }
-
-          $auditReport = Get-Content -LiteralPath $auditPath -Raw | ConvertFrom-Json
-          $mismatchCount = [int]$auditReport.summary.mismatched_roots
-          Write-Host ("VIPC audit mismatch roots (64-bit): {0}" -f $mismatchCount)
-
-          "vipc_audit_path=$auditPath" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
-          "vipc_mismatch_count=$mismatchCount" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
       - name: Report VIPC change status (LV x64)
         shell: pwsh
         run: |
-          if ('${{ steps.vipc_audit.outputs.vipc_mismatch_count }}' -ne '0') {
-            Write-Warning "VIPC drift detected for LV x64; remediation step will run."
-          } elseif ('${{ needs.changes.outputs.vipc }}' -eq 'true') {
+          if ('${{ needs.changes.outputs.vipc }}' -eq 'true') {
             Write-Host ".vipc changes detected for this run."
           } else {
             Write-Host "No .vipc changes detected; audit-first policy still enforced."
           }
-      - name: Apply VIPC remediation (LV x64)
-        if: ${{ steps.vipc_audit.outputs.vipc_mismatch_count != '0' }}
-        shell: pwsh
-        working-directory: ${{ env.REPO_ROOT }}
-        run: |
-          $runnerCliProject = Join-Path $env:REPO_ROOT 'Tooling/runner-cli/RunnerCli/RunnerCli.csproj'
-          if (-not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
-            throw "runner-cli project not found at $runnerCliProject"
-          }
-
-          $logPath = Join-Path $env:REPO_ROOT 'builds\status\vipc-remediate-64.log'
-          $logDir = Split-Path -Path $logPath -Parent
-          if (-not (Test-Path -Path $logDir)) {
-            New-Item -Path $logDir -ItemType Directory -Force | Out-Null
-          }
-
-          '' | Set-Content -Path $logPath -Encoding utf8
-          $runnerCliArgs = @(
-            'vipc', 'apply',
-            '--repo-root', $env:REPO_ROOT,
-            '--supported-bitness', '64',
-            '--vipc-path', '.github/actions/apply-vipc/runner_dependencies.vipc'
-          )
-          $output = & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs *>&1
-          $exitCode = $LASTEXITCODE
-
-          if ($output) {
-            $output |
-              ForEach-Object { $_.ToString() } |
-              Tee-Object -FilePath $logPath -Append |
-              ForEach-Object { Write-Host $_ }
-          }
-
-          if ($exitCode -ne 0) {
-            exit $exitCode
-          }
-      - name: Re-audit VIPC apply (LV x64)
-        if: ${{ steps.vipc_audit.outputs.vipc_mismatch_count != '0' }}
-        shell: pwsh
-        working-directory: ${{ env.REPO_ROOT }}
-        run: |
-          $runnerCliProject = Join-Path $env:REPO_ROOT 'Tooling/runner-cli/RunnerCli/RunnerCli.csproj'
-          if (-not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
-            throw "runner-cli project not found at $runnerCliProject"
-          }
-
-          $runnerCliArgs = @(
-            'vipc', 'assert',
-            '--repo-root', $env:REPO_ROOT,
-            '--supported-bitness', '64',
-            '--vipc-path', '.github/actions/apply-vipc/runner_dependencies.vipc',
-            '--output-path', "$env:REPO_ROOT\\builds\\status\\vipc-audit-post-64.json"
-          )
-          & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs
-          if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
-          }
-      - name: VIPC remediation summary (LV x64)
-        if: ${{ steps.vipc_audit.outputs.vipc_mismatch_count != '0' }}
-        shell: pwsh
-        working-directory: ${{ env.REPO_ROOT }}
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
-            Write-Host "GITHUB_STEP_SUMMARY not available; skipping remediation summary."
-            exit 0
-          }
-
-          $beforePath = Join-Path $env:REPO_ROOT 'builds\status\vipc-audit-64.json'
-          $afterPath = Join-Path $env:REPO_ROOT 'builds\status\vipc-audit-post-64.json'
-          if (-not (Test-Path -LiteralPath $beforePath -PathType Leaf)) {
-            throw "Pre-remediation VIPC audit report not found at $beforePath"
-          }
-          if (-not (Test-Path -LiteralPath $afterPath -PathType Leaf)) {
-            throw "Post-remediation VIPC audit report not found at $afterPath"
-          }
-
-          $before = Get-Content -LiteralPath $beforePath -Raw | ConvertFrom-Json
-          $after = Get-Content -LiteralPath $afterPath -Raw | ConvertFrom-Json
-          $beforeMismatched = @($before.root_audit | Where-Object { -not $_.matched })
-          $afterMismatched = @($after.root_audit | Where-Object { -not $_.matched })
-
-          $remediatedPackages = New-Object System.Collections.Generic.List[string]
-          foreach ($beforeRoot in $beforeMismatched) {
-            $afterRoot = $after.root_audit | Where-Object { $_.root -eq $beforeRoot.root } | Select-Object -First 1
-            if ($null -eq $afterRoot -or -not $afterRoot.matched) {
-              continue
-            }
-            foreach ($pkg in @($beforeRoot.missing_expected + $beforeRoot.unexpected_installed)) {
-              if (-not [string]::IsNullOrWhiteSpace($pkg)) {
-                $remediatedPackages.Add([string]$pkg) | Out-Null
-              }
-            }
-          }
-
-          $uniqueRemediated = @($remediatedPackages | Sort-Object -Unique)
-          $lines = @(
-            '### VIPC Remediation (LV x64)'
-            ("- Before mismatched roots: {0}" -f $beforeMismatched.Count)
-            ("- After mismatched roots: {0}" -f $afterMismatched.Count)
-            ("- Remediated package entries: {0}" -f $uniqueRemediated.Count)
-          )
-          if ($uniqueRemediated.Count -gt 0) {
-            $lines += ''
-            $lines += '- Remediated packages:'
-            $maxRows = [Math]::Min($uniqueRemediated.Count, 25)
-            for ($i = 0; $i -lt $maxRows; $i++) {
-              $lines += ("  - `{0}`" -f $uniqueRemediated[$i])
-            }
-            if ($uniqueRemediated.Count -gt $maxRows) {
-              $lines += ("  - ... and {0} more" -f ($uniqueRemediated.Count - $maxRows))
-            }
-          }
-
-          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ($lines -join [Environment]::NewLine)
       - name: Apply VIPC (LV x64, informational)
-        if: ${{ steps.vipc_audit.outputs.vipc_mismatch_count == '0' && github.event_name == 'workflow_dispatch' && github.event.inputs.vipc_apply_info == 'true' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.vipc_apply_info == 'true' }}
         continue-on-error: true
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
@@ -1038,22 +905,8 @@ jobs:
           name: vipc-audit-64
           path: ${{ env.REPO_ROOT }}/builds/status/vipc-audit-64.json
           if-no-files-found: warn
-      - name: Upload VIPC post-remediation audit artifact (LV x64)
-        if: ${{ always() && steps.vipc_audit.outputs.vipc_mismatch_count != '0' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: vipc-audit-post-64
-          path: ${{ env.REPO_ROOT }}/builds/status/vipc-audit-post-64.json
-          if-no-files-found: warn
-      - name: Upload VIPC remediation log artifact (LV x64)
-        if: ${{ always() && steps.vipc_audit.outputs.vipc_mismatch_count != '0' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: vipc-remediate-log-64
-          path: ${{ env.REPO_ROOT }}/builds/status/vipc-remediate-64.log
-          if-no-files-found: warn
       - name: Upload VIPC apply log artifact (LV x64)
-        if: ${{ always() && steps.vipc_audit.outputs.vipc_mismatch_count == '0' && github.event_name == 'workflow_dispatch' && github.event.inputs.vipc_apply_info == 'true' }}
+        if: ${{ always() && github.event_name == 'workflow_dispatch' && github.event.inputs.vipc_apply_info == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: vipc-apply-log-64
@@ -1085,7 +938,6 @@ jobs:
           create_worktree: 'true'
           worktree_root_mode: runner_temp
       - name: Audit VIPC apply (LV x86)
-        id: vipc_audit
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
         run: |
@@ -1094,156 +946,24 @@ jobs:
             throw "runner-cli project not found at $runnerCliProject"
           }
 
-          $auditPath = "$env:REPO_ROOT\\builds\\status\\vipc-audit-32.json"
           $runnerCliArgs = @(
             'vipc', 'assert',
             '--repo-root', $env:REPO_ROOT,
             '--supported-bitness', '32',
             '--vipc-path', '.github/actions/apply-vipc/runner_dependencies.vipc',
-            '--output-path', $auditPath,
-            '--fail-on-mismatch', 'false'
+            '--output-path', "$env:REPO_ROOT\\builds\\status\\vipc-audit-32.json"
           )
           & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs
-          if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
-          }
-
-          if (-not (Test-Path -LiteralPath $auditPath -PathType Leaf)) {
-            throw "VIPC audit report was not produced at $auditPath"
-          }
-
-          $auditReport = Get-Content -LiteralPath $auditPath -Raw | ConvertFrom-Json
-          $mismatchCount = [int]$auditReport.summary.mismatched_roots
-          Write-Host ("VIPC audit mismatch roots (32-bit): {0}" -f $mismatchCount)
-
-          "vipc_audit_path=$auditPath" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
-          "vipc_mismatch_count=$mismatchCount" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
       - name: Report VIPC change status (LV x86)
         shell: pwsh
         run: |
-          if ('${{ steps.vipc_audit.outputs.vipc_mismatch_count }}' -ne '0') {
-            Write-Warning "VIPC drift detected for LV x86; remediation step will run."
-          } elseif ('${{ needs.changes.outputs.vipc }}' -eq 'true') {
+          if ('${{ needs.changes.outputs.vipc }}' -eq 'true') {
             Write-Host ".vipc changes detected for this run."
           } else {
             Write-Host "No .vipc changes detected; audit-first policy still enforced."
           }
-      - name: Apply VIPC remediation (LV x86)
-        if: ${{ steps.vipc_audit.outputs.vipc_mismatch_count != '0' }}
-        shell: pwsh
-        working-directory: ${{ env.REPO_ROOT }}
-        run: |
-          $runnerCliProject = Join-Path $env:REPO_ROOT 'Tooling/runner-cli/RunnerCli/RunnerCli.csproj'
-          if (-not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
-            throw "runner-cli project not found at $runnerCliProject"
-          }
-
-          $logPath = Join-Path $env:REPO_ROOT 'builds\status\vipc-remediate-32.log'
-          $logDir = Split-Path -Path $logPath -Parent
-          if (-not (Test-Path -Path $logDir)) {
-            New-Item -Path $logDir -ItemType Directory -Force | Out-Null
-          }
-
-          '' | Set-Content -Path $logPath -Encoding utf8
-          $runnerCliArgs = @(
-            'vipc', 'apply',
-            '--repo-root', $env:REPO_ROOT,
-            '--supported-bitness', '32',
-            '--vipc-path', '.github/actions/apply-vipc/runner_dependencies.vipc'
-          )
-          $output = & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs *>&1
-          $exitCode = $LASTEXITCODE
-
-          if ($output) {
-            $output |
-              ForEach-Object { $_.ToString() } |
-              Tee-Object -FilePath $logPath -Append |
-              ForEach-Object { Write-Host $_ }
-          }
-
-          if ($exitCode -ne 0) {
-            exit $exitCode
-          }
-      - name: Re-audit VIPC apply (LV x86)
-        if: ${{ steps.vipc_audit.outputs.vipc_mismatch_count != '0' }}
-        shell: pwsh
-        working-directory: ${{ env.REPO_ROOT }}
-        run: |
-          $runnerCliProject = Join-Path $env:REPO_ROOT 'Tooling/runner-cli/RunnerCli/RunnerCli.csproj'
-          if (-not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
-            throw "runner-cli project not found at $runnerCliProject"
-          }
-
-          $runnerCliArgs = @(
-            'vipc', 'assert',
-            '--repo-root', $env:REPO_ROOT,
-            '--supported-bitness', '32',
-            '--vipc-path', '.github/actions/apply-vipc/runner_dependencies.vipc',
-            '--output-path', "$env:REPO_ROOT\\builds\\status\\vipc-audit-post-32.json"
-          )
-          & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs
-          if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
-          }
-      - name: VIPC remediation summary (LV x86)
-        if: ${{ steps.vipc_audit.outputs.vipc_mismatch_count != '0' }}
-        shell: pwsh
-        working-directory: ${{ env.REPO_ROOT }}
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
-            Write-Host "GITHUB_STEP_SUMMARY not available; skipping remediation summary."
-            exit 0
-          }
-
-          $beforePath = Join-Path $env:REPO_ROOT 'builds\status\vipc-audit-32.json'
-          $afterPath = Join-Path $env:REPO_ROOT 'builds\status\vipc-audit-post-32.json'
-          if (-not (Test-Path -LiteralPath $beforePath -PathType Leaf)) {
-            throw "Pre-remediation VIPC audit report not found at $beforePath"
-          }
-          if (-not (Test-Path -LiteralPath $afterPath -PathType Leaf)) {
-            throw "Post-remediation VIPC audit report not found at $afterPath"
-          }
-
-          $before = Get-Content -LiteralPath $beforePath -Raw | ConvertFrom-Json
-          $after = Get-Content -LiteralPath $afterPath -Raw | ConvertFrom-Json
-          $beforeMismatched = @($before.root_audit | Where-Object { -not $_.matched })
-          $afterMismatched = @($after.root_audit | Where-Object { -not $_.matched })
-
-          $remediatedPackages = New-Object System.Collections.Generic.List[string]
-          foreach ($beforeRoot in $beforeMismatched) {
-            $afterRoot = $after.root_audit | Where-Object { $_.root -eq $beforeRoot.root } | Select-Object -First 1
-            if ($null -eq $afterRoot -or -not $afterRoot.matched) {
-              continue
-            }
-            foreach ($pkg in @($beforeRoot.missing_expected + $beforeRoot.unexpected_installed)) {
-              if (-not [string]::IsNullOrWhiteSpace($pkg)) {
-                $remediatedPackages.Add([string]$pkg) | Out-Null
-              }
-            }
-          }
-
-          $uniqueRemediated = @($remediatedPackages | Sort-Object -Unique)
-          $lines = @(
-            '### VIPC Remediation (LV x86)'
-            ("- Before mismatched roots: {0}" -f $beforeMismatched.Count)
-            ("- After mismatched roots: {0}" -f $afterMismatched.Count)
-            ("- Remediated package entries: {0}" -f $uniqueRemediated.Count)
-          )
-          if ($uniqueRemediated.Count -gt 0) {
-            $lines += ''
-            $lines += '- Remediated packages:'
-            $maxRows = [Math]::Min($uniqueRemediated.Count, 25)
-            for ($i = 0; $i -lt $maxRows; $i++) {
-              $lines += ("  - `{0}`" -f $uniqueRemediated[$i])
-            }
-            if ($uniqueRemediated.Count -gt $maxRows) {
-              $lines += ("  - ... and {0} more" -f ($uniqueRemediated.Count - $maxRows))
-            }
-          }
-
-          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ($lines -join [Environment]::NewLine)
       - name: Apply VIPC (LV x86, informational)
-        if: ${{ steps.vipc_audit.outputs.vipc_mismatch_count == '0' && github.event_name == 'workflow_dispatch' && github.event.inputs.vipc_apply_info == 'true' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.vipc_apply_info == 'true' }}
         continue-on-error: true
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
@@ -1286,22 +1006,8 @@ jobs:
           name: vipc-audit-32
           path: ${{ env.REPO_ROOT }}/builds/status/vipc-audit-32.json
           if-no-files-found: warn
-      - name: Upload VIPC post-remediation audit artifact (LV x86)
-        if: ${{ always() && steps.vipc_audit.outputs.vipc_mismatch_count != '0' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: vipc-audit-post-32
-          path: ${{ env.REPO_ROOT }}/builds/status/vipc-audit-post-32.json
-          if-no-files-found: warn
-      - name: Upload VIPC remediation log artifact (LV x86)
-        if: ${{ always() && steps.vipc_audit.outputs.vipc_mismatch_count != '0' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: vipc-remediate-log-32
-          path: ${{ env.REPO_ROOT }}/builds/status/vipc-remediate-32.log
-          if-no-files-found: warn
       - name: Upload VIPC apply log artifact (LV x86)
-        if: ${{ always() && steps.vipc_audit.outputs.vipc_mismatch_count == '0' && github.event_name == 'workflow_dispatch' && github.event.inputs.vipc_apply_info == 'true' }}
+        if: ${{ always() && github.event_name == 'workflow_dispatch' && github.event.inputs.vipc_apply_info == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: vipc-apply-log-32

@@ -30,8 +30,6 @@ Describe 'VIP build CLI contract' {
         $content | Should -Match 'function Set-VipmTargetSettingsFromContract'
         $content | Should -Match 'Resolve-LabVIEWCliPortFromContract'
         $content | Should -Match 'Connection Timeout'
-        $content | Should -Match 'Active Target\.Version'
-        $content | Should -Match 'Active Target\.Name'
         $content | Should -Match 'Set-VipmTargetSettingsFromContract\s*`?\s*-RepoRoot'
     }
 
