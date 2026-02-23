@@ -1384,6 +1384,42 @@ jobs:
         if: always()
         uses: ./.github/actions/lvie-job-teardown
 
+  vi-analyzer-bitness-parity:
+    name: VI Analyzer Bitness Parity
+    if: always()
+    needs: [run-metadata, prerelease-context, version-gate, vi-analyzer]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download VI Analyzer status (LV x64)
+        uses: actions/download-artifact@v4
+        with:
+          name: vi-analyzer-status-Windows-64-bit
+          path: vi-analyzer-status/x64
+      - name: Download VI Analyzer status (LV x86)
+        uses: actions/download-artifact@v4
+        with:
+          name: vi-analyzer-status-Windows-32-bit
+          path: vi-analyzer-status/x86
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Assert VI Analyzer bitness parity
+        shell: pwsh
+        run: |
+          & pwsh -NoProfile -File "$env:GITHUB_WORKSPACE/Tooling/Assert-ViAnalyzerBitnessParity.ps1" `
+            -RepoRoot $env:GITHUB_WORKSPACE `
+            -StatusPath32 "vi-analyzer-status/x86/vi-analyzer-summary-Windows-32.json" `
+            -StatusPath64 "vi-analyzer-status/x64/vi-analyzer-summary-Windows-64.json" `
+            -OutputPath "builds/status/vi-analyzer-bitness-parity.json"
+      - name: Upload VI Analyzer parity status
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vi-analyzer-bitness-parity-status
+          path: ${{ github.workspace }}/builds/status/vi-analyzer-bitness-parity.json
+          if-no-files-found: warn
+
   version:
     name: Compute Version
     needs: [run-metadata, version-gate, prerelease-context]
@@ -1435,7 +1471,7 @@ jobs:
   unit-tests:
     name: Test Source Using LV ${{ needs.version-gate.outputs.raw }} ${{ matrix.bitness_label }}
     if: ${{ needs.prerelease-context.outputs.ci_profile != 'release-priority' }}
-    needs: [run-metadata, prerelease-context, version-gate, apply-deps-64, apply-deps-32, vi-analyzer]
+    needs: [run-metadata, prerelease-context, version-gate, apply-deps-64, apply-deps-32, vi-analyzer, vi-analyzer-bitness-parity]
     runs-on: ${{ matrix.runner_label }}
     env:
       LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
@@ -3438,6 +3474,7 @@ jobs:
       - apply-deps-64
       - apply-deps-32
       - vi-analyzer
+      - vi-analyzer-bitness-parity
       - unit-tests
       - build-ppl-x64
       - build-ppl-x86
@@ -3486,6 +3523,7 @@ jobs:
             'apply-deps-64',
             'apply-deps-32',
             'vi-analyzer',
+            'vi-analyzer-bitness-parity',
             'unit-tests',
             'build-ppl-x64',
             'build-ppl-x86',
@@ -3494,7 +3532,7 @@ jobs:
           $requiredByProfile = @{
             'full' = @($requiredCommon + $requiredFullValidation)
             'pr-fast' = @($requiredCommon + $requiredFullValidation)
-            'release-priority' = @($requiredCommon + @('vi-analyzer'))
+            'release-priority' = @($requiredCommon + @('vi-analyzer', 'vi-analyzer-bitness-parity'))
           }
 
           $ciProfile = '${{ needs.prerelease-context.outputs.ci_profile }}'
