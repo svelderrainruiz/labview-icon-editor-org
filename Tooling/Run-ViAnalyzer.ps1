@@ -94,16 +94,9 @@ function Test-ViAnalyzerInstallation {
 
     $labviewRoot = Split-Path -Path $LabVIEWExecutablePath -Parent
     $analyzerRoot = Join-Path $labviewRoot 'vi.lib\addons\analyzer'
-    $expectedPaths = @(
-        $analyzerRoot,
-        (Join-Path $analyzerRoot 'analyzer API\Run VI Analyzer.vi')
-    )
-
     $missingPaths = New-Object 'System.Collections.Generic.List[string]'
-    foreach ($path in $expectedPaths) {
-        if (-not (Test-Path -Path $path)) {
-            $missingPaths.Add($path) | Out-Null
-        }
+    if (-not (Test-Path -Path $analyzerRoot -PathType Container)) {
+        $missingPaths.Add($analyzerRoot) | Out-Null
     }
 
     return [pscustomobject]@{
