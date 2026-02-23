@@ -56,15 +56,16 @@ public static class PplBuildService
         }
 
         var repoRoot = Path.GetFullPath(options.RepoRoot);
-        var executionYearResolution = LabVIEWExecutionYearCompatibilityService.Resolve(
-            sourceLabviewVersion: options.LabviewVersion,
-            repoRoot: repoRoot,
-            commandLabel: "ppl build");
+        var sourceVersion = LabVIEWVersionService.GetVersionInfo(options.LabviewVersion, repoRoot);
+        Console.Error.WriteLine(
+            $"ppl build LabVIEW source contract: raw={sourceVersion.Raw}; year={sourceVersion.Year}; minor={sourceVersion.MinorRevision}.");
+        Console.Error.WriteLine(
+            $"ppl build LabVIEW execution year: {sourceVersion.Year} (compatibility mapping disabled for PPL builds).");
         var args = new List<string>
         {
             "-RepoRoot", repoRoot,
-            "-LabVIEWVersion", executionYearResolution.SourceVersion.Raw,
-            "-ExecutionLabVIEWYear", executionYearResolution.ExecutionYear,
+            "-LabVIEWVersion", sourceVersion.Raw,
+            "-ExecutionLabVIEWYear", sourceVersion.Year,
             "-SupportedBitness", options.SupportedBitness,
             "-Major", options.Major,
             "-Minor", options.Minor,

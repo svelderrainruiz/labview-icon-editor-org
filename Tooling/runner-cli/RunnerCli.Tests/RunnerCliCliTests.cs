@@ -773,7 +773,7 @@ public class RunnerCliCliTests
     {
         var repoRoot = FindRepoRoot();
         var repoLabview = GetRepoLabVIEWVersionInfo(repoRoot);
-        var expectedExecutionYear = ResolveExpectedExecutionYear(repoLabview.Year);
+        var expectedExecutionYear = repoLabview.Year;
         var args = string.Join(' ', new[]
         {
             "ppl build",
