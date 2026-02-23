@@ -30,7 +30,15 @@ param(
     [string]$ReportsRoot = 'builds/vi-analyzer',
 
     [Parameter(Mandatory = $false)]
-    [string]$StatusPath = 'builds/status/vi-analyzer-summary.json'
+    [string]$StatusPath = 'builds/status/vi-analyzer-summary.json',
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(1, 3)]
+    [int]$TaskMaxAttempts = 2,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(0, 30)]
+    [int]$TransientRetryDelaySeconds = 5
 )
 
 $ErrorActionPreference = 'Stop'
@@ -76,6 +84,58 @@ function Initialize-Directory {
     if (-not (Test-Path -Path $Path -PathType Container)) {
         New-Item -Path $Path -ItemType Directory -Force | Out-Null
     }
+}
+
+function Test-ViAnalyzerInstallation {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$LabVIEWExecutablePath
+    )
+
+    $labviewRoot = Split-Path -Path $LabVIEWExecutablePath -Parent
+    $analyzerRoot = Join-Path $labviewRoot 'vi.lib\addons\analyzer'
+    $expectedPaths = @(
+        $analyzerRoot,
+        (Join-Path $analyzerRoot 'analyzer API\Run VI Analyzer.vi')
+    )
+
+    $missingPaths = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($path in $expectedPaths) {
+        if (-not (Test-Path -Path $path)) {
+            $missingPaths.Add($path) | Out-Null
+        }
+    }
+
+    return [pscustomobject]@{
+        installed     = ($missingPaths.Count -eq 0)
+        analyzer_root = $analyzerRoot
+        missing_paths = $missingPaths.ToArray()
+    }
+}
+
+function Test-IsTransientLabVIEWCliConnectionFailure {
+    param(
+        [int]$ExitCode,
+        [string[]]$OutputLines
+    )
+
+    if ($ExitCode -eq 0) {
+        return $false
+    }
+
+    $text = if ($OutputLines -and $OutputLines.Count -gt 0) {
+        $OutputLines -join [Environment]::NewLine
+    } else {
+        ''
+    }
+
+    if ([string]::IsNullOrWhiteSpace($text)) {
+        return $false
+    }
+
+    return $text -match 'Error code\s*:\s*-350000' `
+        -or $text -match 'failed to establish a connection with LabVIEW' `
+        -or $text -match 'The CLI for LabVIEW failed to establish a connection'
 }
 
 function Test-EnabledValue {
@@ -387,6 +447,12 @@ if ([string]::IsNullOrWhiteSpace($resolvedLabVIEWYear)) {
 }
 
 $labviewExecutablePath = Resolve-LabVIEWExecutablePath -VersionYear $resolvedLabVIEWYear -Bitness $SupportedBitness
+$viAnalyzerInstall = Test-ViAnalyzerInstallation -LabVIEWExecutablePath $labviewExecutablePath
+if (-not $viAnalyzerInstall.installed) {
+    $missingText = @($viAnalyzerInstall.missing_paths) -join '; '
+    throw ("VI Analyzer is not installed for LabVIEW {0} ({1}-bit). Missing expected path(s): {2}" -f $resolvedLabVIEWYear, $SupportedBitness, $missingText)
+}
+
 $portRemediationEnabled = Test-EnabledValue -Value $env:LVIE_REMEDIATE_LABVIEWCLI_PORT_CONTRACT
 if ($portRemediationEnabled) {
     Write-Warning 'LabVIEWCLI port contract remediation is enabled via LVIE_REMEDIATE_LABVIEWCLI_PORT_CONTRACT.'
@@ -406,6 +472,7 @@ if (-not $labviewCliCommand) {
 
 Write-Host ("Resolved LabVIEW: raw={0}, year={1}, bitness={2}" -f $resolvedLabVIEWVersionRaw, $resolvedLabVIEWYear, $SupportedBitness)
 Write-Host ("LabVIEW executable: {0}" -f $labviewExecutablePath)
+Write-Host ("VI Analyzer install root: {0}" -f $viAnalyzerInstall.analyzer_root)
 Write-Host ("Using LabVIEWCLI port {0} (source: {1})" -f $portResolution.PortNumber, $portResolution.Source)
 if ($portResolution.RemediationEnabled -and $portResolution.RemediationApplied) {
     Write-Warning ("LabVIEWCLI port contract remediation modified LabVIEW.ini at {0}" -f $portResolution.IniPath)
@@ -440,7 +507,7 @@ foreach ($task in $tasks) {
 
     Write-Host ""
     Write-Host ("=== VI Analyzer task: {0} ===" -f $taskId)
-    $start = Get-Date
+    $maxAttempts = [Math]::Max(1, [int]$TaskMaxAttempts)
     $cliArgs = @(
         '-OperationName', 'RunVIAnalyzer',
         '-LabVIEWPath', $labviewExecutablePath,
@@ -452,17 +519,50 @@ foreach ($task in $tasks) {
         '-Headless'
     )
 
-    $rawOutput = & $labviewCliCommand.Source @cliArgs 2>&1
-    $exitCode = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+    $attempt = 0
+    $exitCode = 0
+    $durationMs = 0
     $outputLines = @()
-    foreach ($entry in @($rawOutput)) {
-        if ($null -ne $entry) {
-            $line = [string]$entry
-            $outputLines += $line
-            Write-Host $line
+    $attemptResults = New-Object 'System.Collections.Generic.List[object]'
+    while ($true) {
+        $attempt += 1
+        if ($attempt -gt 1) {
+            Write-Host ("Retrying VI Analyzer task '{0}' attempt {1}/{2}..." -f $taskId, $attempt, $maxAttempts)
         }
+
+        $start = Get-Date
+        $rawOutput = & $labviewCliCommand.Source @cliArgs 2>&1
+        $exitCode = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+        $outputLines = @()
+        foreach ($entry in @($rawOutput)) {
+            if ($null -ne $entry) {
+                $line = [string]$entry
+                $outputLines += $line
+                Write-Host $line
+            }
+        }
+        $durationMs = [int][Math]::Round(((Get-Date) - $start).TotalMilliseconds)
+
+        $isTransientConnectionFailure = Test-IsTransientLabVIEWCliConnectionFailure `
+            -ExitCode $exitCode `
+            -OutputLines $outputLines
+        $attemptResults.Add([pscustomobject]@{
+                attempt                      = $attempt
+                exit_code                    = $exitCode
+                duration_ms                  = $durationMs
+                transient_connection_failure = $isTransientConnectionFailure
+            }) | Out-Null
+
+        if ($isTransientConnectionFailure -and $attempt -lt $maxAttempts) {
+            Write-Warning ("Transient LabVIEWCLI connection failure detected for task '{0}' on attempt {1}/{2}; retrying in {3}s." -f $taskId, $attempt, $maxAttempts, $TransientRetryDelaySeconds)
+            if ($TransientRetryDelaySeconds -gt 0) {
+                Start-Sleep -Seconds $TransientRetryDelaySeconds
+            }
+            continue
+        }
+
+        break
     }
-    $durationMs = [int][Math]::Round(((Get-Date) - $start).TotalMilliseconds)
 
     $cliCounts = Get-LabVIEWCliSummaryCount -Lines $outputLines
     $reportText = Get-ViAnalyzerReportText -ReportPath $reportPath
@@ -524,6 +624,10 @@ foreach ($task in $tasks) {
             report_path     = $reportPath
             exit_code       = $exitCode
             duration_ms     = $durationMs
+            attempt_count   = $attempt
+            max_attempts    = $maxAttempts
+            retry_applied   = ($attempt -gt 1)
+            attempts        = @($attemptResults)
             succeeded       = $taskSucceeded
             counts          = [pscustomobject]$counts
             failure_reasons = @($failureReasons)
@@ -545,6 +649,10 @@ $status = [ordered]@{
         minor_revision  = [int]$labviewInfo.MinorRevision
         bitness         = $SupportedBitness
         executable_path = $labviewExecutablePath
+    }
+    vi_analyzer_installation = [ordered]@{
+        installed     = [bool]$viAnalyzerInstall.installed
+        analyzer_root = [string]$viAnalyzerInstall.analyzer_root
     }
     port             = [ordered]@{
         number        = [int]$portResolution.PortNumber
