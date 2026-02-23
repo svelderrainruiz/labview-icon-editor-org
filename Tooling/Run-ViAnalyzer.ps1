@@ -446,6 +446,43 @@ if (-not $viAnalyzerInstall.installed) {
     throw ("VI Analyzer is not installed for LabVIEW {0} ({1}-bit). Missing expected path(s): {2}" -f $resolvedLabVIEWYear, $SupportedBitness, $missingText)
 }
 
+function Test-IsAllowlistedViAnalyzerFailureItem {
+    param(
+        [AllowNull()]
+        [psobject]$FailureItem
+    )
+
+    if ($null -eq $FailureItem) {
+        return $false
+    }
+
+    $section = [string]$FailureItem.section
+    $message = [string]$FailureItem.message
+    $filePath = [string]$FailureItem.file_path
+    if (-not $section.Equals('testing_errors', [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $false
+    }
+
+    if ($message -notmatch 'Error\s+1040\..*password protected') {
+        return $false
+    }
+
+    if ([string]::IsNullOrWhiteSpace($filePath)) {
+        return $false
+    }
+
+    $normalizedFilePath = $filePath -replace '/', '\'
+    if ($normalizedFilePath -match '(?i)\\vi\.lib\\LabVIEW Icon API\\lv_icon\\Support\\') {
+        return $true
+    }
+
+    if ($normalizedFilePath -match '(?i)\\resource\\plugins\\NIIconEditor\\') {
+        return $true
+    }
+
+    return $false
+}
+
 $portRemediationEnabled = Test-EnabledValue -Value $env:LVIE_REMEDIATE_LABVIEWCLI_PORT_CONTRACT
 if ($portRemediationEnabled) {
     Write-Warning 'LabVIEWCLI port contract remediation is enabled via LVIE_REMEDIATE_LABVIEWCLI_PORT_CONTRACT.'
@@ -562,7 +599,14 @@ foreach ($task in $tasks) {
     $reportCounts = Get-ViAnalyzerReportCount -ReportText $reportText
     $counts = Join-ViAnalyzerCount -CliCounts $cliCounts -ReportCounts $reportCounts
     $failureItems = Get-ViAnalyzerFailureItemList -ReportText $reportText
-    $failureFilePaths = Get-OrderedUniqueFilePathList -Items $failureItems
+    $allowlistedFailureItems = @($failureItems | Where-Object { Test-IsAllowlistedViAnalyzerFailureItem -FailureItem $_ })
+    $nonAllowlistedFailureItems = @($failureItems | Where-Object { -not (Test-IsAllowlistedViAnalyzerFailureItem -FailureItem $_) })
+    $failureFilePaths = Get-OrderedUniqueFilePathList -Items $nonAllowlistedFailureItems
+    $allowlistedTestErrorCount = $allowlistedFailureItems.Count
+    $effectiveTestErrorCount = $null
+    if ($null -ne $counts.test_error) {
+        $effectiveTestErrorCount = [Math]::Max(0, ([int]$counts.test_error - $allowlistedTestErrorCount))
+    }
 
     $failureReasons = New-Object 'System.Collections.Generic.List[string]'
     if (-not (Test-Path -Path $reportPath -PathType Leaf)) {
@@ -591,18 +635,21 @@ foreach ($task in $tasks) {
     if ($null -ne $counts.test_unrunnable -and [int]$counts.test_unrunnable -gt 0) {
         $failureReasons.Add(("Test unrunnable count is {0}" -f $counts.test_unrunnable)) | Out-Null
     }
-    if ($null -ne $counts.test_error -and [int]$counts.test_error -gt 0) {
-        $failureReasons.Add(("Test error count is {0}" -f $counts.test_error)) | Out-Null
+    if ($null -ne $effectiveTestErrorCount -and [int]$effectiveTestErrorCount -gt 0) {
+        $failureReasons.Add(("Test error count is {0} (allowlisted={1})" -f $effectiveTestErrorCount, $allowlistedTestErrorCount)) | Out-Null
     }
 
     $taskSucceeded = $failureReasons.Count -eq 0
+    if ($allowlistedFailureItems.Count -gt 0) {
+        Write-Warning ("Allowlisted password-protected VI Analyzer testing errors for task '{0}': {1}" -f $taskId, $allowlistedFailureItems.Count)
+    }
     if (-not $taskSucceeded) {
         $overallSuccess = $false
-        if ($failureItems.Count -gt 0) {
+        if ($nonAllowlistedFailureItems.Count -gt 0) {
             Write-Host ("Failure details for task '{0}':" -f $taskId)
             foreach ($filePath in $failureFilePaths) {
                 Write-Host ("- File: {0}" -f $filePath)
-                foreach ($item in @($failureItems | Where-Object { $_.file_path -eq $filePath })) {
+                foreach ($item in @($nonAllowlistedFailureItems | Where-Object { $_.file_path -eq $filePath })) {
                     Write-Host ("  - [{0}] {1}: {2}" -f $item.section, $item.check_name, $item.message)
                 }
             }
@@ -623,8 +670,11 @@ foreach ($task in $tasks) {
             attempts        = $attemptResults.ToArray()
             succeeded       = $taskSucceeded
             counts          = [pscustomobject]$counts
+            effective_test_error_count = $effectiveTestErrorCount
+            allowlisted_test_error_count = $allowlistedTestErrorCount
             failure_reasons = $failureReasons.ToArray()
-            failure_items   = @($failureItems)
+            failure_items   = @($nonAllowlistedFailureItems)
+            allowlisted_failure_items = @($allowlistedFailureItems)
             failure_file_paths = @($failureFilePaths)
         }) | Out-Null
 }
