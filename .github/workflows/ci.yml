@@ -1433,7 +1433,7 @@ jobs:
 
   # Stage 3: Self-hosted LabVIEW validation/build chain (profile-gated).
   unit-tests:
-    name: Test Source Using LV ${{ matrix.bitness }}-bit
+    name: Test Source Using LV ${{ needs.version-gate.outputs.raw }} ${{ matrix.bitness_label }}
     if: ${{ needs.prerelease-context.outputs.ci_profile != 'release-priority' }}
     needs: [run-metadata, prerelease-context, version-gate, apply-deps-64, apply-deps-32, vi-analyzer]
     runs-on: ${{ matrix.runner_label }}
@@ -1452,8 +1452,10 @@ jobs:
       matrix:
         include:
           - bitness: '64'
+            bitness_label: x64
             runner_label: ${{ vars.LVIE_RUNNER_LABEL_64 || vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
           - bitness: '32'
+            bitness_label: x86
             runner_label: ${{ vars.LVIE_RUNNER_LABEL_32 || vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
     steps:
       - name: Checkout code
@@ -1467,7 +1469,7 @@ jobs:
           bitness: ${{ matrix.bitness }}
           create_worktree: 'true'
           worktree_root_mode: runner_temp
-      - name: Assert VIPC dependencies on source-test runner (LV ${{ matrix.bitness }}-bit)
+      - name: Assert VIPC dependencies on source-test runner (LV ${{ needs.version-gate.outputs.raw }} ${{ matrix.bitness_label }})
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
         run: |
@@ -1485,7 +1487,7 @@ jobs:
             '--output-path', $precheckOutputPath
           )
           & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs
-      - name: Test Source Using LV ${{ matrix.bitness }}-bit
+      - name: Test Source Using LV ${{ needs.version-gate.outputs.raw }} ${{ matrix.bitness_label }}
         id: source_test
         shell: pwsh
         env:
@@ -2005,7 +2007,7 @@ jobs:
           close_bitness: ${{ matrix.bitness }}
 
   build-ppl-x86:
-    name: Build 32-bit Packed Library
+    name: Build Packed Library (LV ${{ needs.version-gate.outputs.raw }} x86)
     if: ${{ needs.prerelease-context.outputs.ci_profile != 'release-priority' }}
     needs: [run-metadata, prerelease-context, version-gate, unit-tests, version]
     runs-on: ${{ vars.LVIE_RUNNER_LABEL_32 || vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
@@ -2026,7 +2028,7 @@ jobs:
           bitness: 32
           create_worktree: 'true'
           worktree_root_mode: runner_temp
-      - name: Build PPL (LV 32-bit)
+      - name: Build PPL (LV ${{ needs.version-gate.outputs.raw }} x86)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
         run: |
@@ -2050,13 +2052,13 @@ jobs:
           $runnerCliExitCode = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
           Write-Host ("runner-cli ppl build exit code: {0}" -f $runnerCliExitCode)
           exit $runnerCliExitCode
-      - name: Rename PPL (LV 32-bit)
+      - name: Rename PPL (LV ${{ needs.version-gate.outputs.raw }} x86)
         shell: pwsh
         run: |
           & "$env:REPO_ROOT\\.github\\actions\\rename-file\\Rename-file.ps1" `
             -CurrentFilename "$env:REPO_ROOT\\resource\\plugins\\lv_icon.lvlibp" `
             -NewFilename "$env:REPO_ROOT\\resource\\plugins\\lv_icon_x86.lvlibp"
-      - name: Write packed library report (32-bit)
+      - name: Write packed library report (LV ${{ needs.version-gate.outputs.raw }} x86)
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -2097,12 +2099,12 @@ jobs:
 
           $xml.Save($reportPath)
           Write-Host ("Packed library report written: {0}" -f $reportPath)
-      - name: Upload packed library artifact (32-bit)
+      - name: Upload packed library artifact (LV ${{ needs.version-gate.outputs.raw }} x86)
         uses: actions/upload-artifact@v4
         with:
           name: lv_icon_x86.lvlibp
           path: ${{ env.REPO_ROOT }}/resource/plugins/lv_icon_x86.lvlibp
-      - name: Upload packed library report artifact (32-bit)
+      - name: Upload packed library report artifact (LV ${{ needs.version-gate.outputs.raw }} x86)
         uses: actions/upload-artifact@v4
         with:
           name: lv_icon.lvlibp-${{ runner.os }}-32-report
@@ -2118,7 +2120,7 @@ jobs:
           close_bitness: 32
 
   build-ppl-x64:
-    name: Build 64-bit Packed Library
+    name: Build Packed Library (LV ${{ needs.version-gate.outputs.raw }} x64)
     if: ${{ needs.prerelease-context.outputs.ci_profile != 'release-priority' }}
     needs: [run-metadata, prerelease-context, version-gate, unit-tests, version]
     runs-on: ${{ vars.LVIE_RUNNER_LABEL_64 || vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
@@ -2139,7 +2141,7 @@ jobs:
           bitness: 64
           create_worktree: 'true'
           worktree_root_mode: runner_temp
-      - name: Build PPL (LV 64-bit)
+      - name: Build PPL (LV ${{ needs.version-gate.outputs.raw }} x64)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
         run: |
@@ -2163,13 +2165,13 @@ jobs:
           $runnerCliExitCode = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
           Write-Host ("runner-cli ppl build exit code: {0}" -f $runnerCliExitCode)
           exit $runnerCliExitCode
-      - name: Rename PPL (LV 64-bit)
+      - name: Rename PPL (LV ${{ needs.version-gate.outputs.raw }} x64)
         shell: pwsh
         run: |
           & "$env:REPO_ROOT\\.github\\actions\\rename-file\\Rename-file.ps1" `
             -CurrentFilename "$env:REPO_ROOT\\resource\\plugins\\lv_icon.lvlibp" `
             -NewFilename "$env:REPO_ROOT\\resource\\plugins\\lv_icon_x64.lvlibp"
-      - name: Write packed library report (64-bit)
+      - name: Write packed library report (LV ${{ needs.version-gate.outputs.raw }} x64)
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -2210,12 +2212,12 @@ jobs:
 
           $xml.Save($reportPath)
           Write-Host ("Packed library report written: {0}" -f $reportPath)
-      - name: Upload packed library artifact (64-bit)
+      - name: Upload packed library artifact (LV ${{ needs.version-gate.outputs.raw }} x64)
         uses: actions/upload-artifact@v4
         with:
           name: lv_icon_x64.lvlibp
           path: ${{ env.REPO_ROOT }}/resource/plugins/lv_icon_x64.lvlibp
-      - name: Upload packed library report artifact (64-bit)
+      - name: Upload packed library report artifact (LV ${{ needs.version-gate.outputs.raw }} x64)
         uses: actions/upload-artifact@v4
         with:
           name: lv_icon.lvlibp-${{ runner.os }}-64-report
@@ -2231,7 +2233,7 @@ jobs:
           close_bitness: 64
 
   build-vip:
-    name: Build VI Package
+    name: Build VI Package (LV ${{ needs.version-gate.outputs.raw }} x64)
     if: ${{ needs.prerelease-context.outputs.ci_profile != 'release-priority' }}
     needs: [run-metadata, prerelease-context, version-gate, build-ppl-x64, build-ppl-x86, version]
     runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
@@ -2369,7 +2371,7 @@ jobs:
             -Commit "${{ github.sha }}" `
             -ReleaseNotesFile "$env:REPO_ROOT\\Tooling\\deployment\\release_notes.md" `
             -DisplayInformationJsonPath $displayInformationJsonPath
-      - name: Build VI Package (LV 64-bit)
+      - name: Build VI Package (LV ${{ needs.version-gate.outputs.raw }} x64)
         shell: pwsh
         run: |
           $runnerCliProject = @(

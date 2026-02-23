@@ -45,9 +45,23 @@ Describe "Runner CLI in-place contract" {
     }
 
     It "builds runner-cli in place for Build VI Package workflow step" {
-        $script:ciWorkflow | Should -Match 'Build VI Package \(LV 64-bit\)'
+        $script:ciWorkflow | Should -Match 'Build VI Package \(LV \${{\s*needs\.version-gate\.outputs\.raw\s*}}\s+x64\)'
         $script:ciWorkflow | Should -Match 'Using in-place runner-cli project at'
         $script:ciWorkflow | Should -Match '& dotnet run --project \$runnerCliProject --configuration Release -- @runnerCliArgs'
         $script:ciWorkflow | Should -Not -Match 'Using prebuilt runner-cli at'
+    }
+
+    It "names source-test jobs with .lvversion raw value and x64/x86 lane labels" {
+        $script:ciWorkflow | Should -Match 'name:\s*Test Source Using LV \${{\s*needs\.version-gate\.outputs\.raw\s*}}\s+\${{\s*matrix\.bitness_label\s*}}'
+        $script:ciWorkflow | Should -Match "bitness_label:\s*x64"
+        $script:ciWorkflow | Should -Match "bitness_label:\s*x86"
+        $script:ciWorkflow | Should -Match 'Test Source Using LV \${{\s*needs\.version-gate\.outputs\.raw\s*}}\s+\${{\s*matrix\.bitness_label\s*}}'
+    }
+
+    It "names packed-library jobs with .lvversion raw value and x64/x86 labels" {
+        $script:ciWorkflow | Should -Match 'name:\s*Build Packed Library \(LV \${{\s*needs\.version-gate\.outputs\.raw\s*}}\s+x86\)'
+        $script:ciWorkflow | Should -Match 'name:\s*Build Packed Library \(LV \${{\s*needs\.version-gate\.outputs\.raw\s*}}\s+x64\)'
+        $script:ciWorkflow | Should -Match 'Build PPL \(LV \${{\s*needs\.version-gate\.outputs\.raw\s*}}\s+x86\)'
+        $script:ciWorkflow | Should -Match 'Build PPL \(LV \${{\s*needs\.version-gate\.outputs\.raw\s*}}\s+x64\)'
     }
 }
