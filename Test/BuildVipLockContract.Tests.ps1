@@ -50,4 +50,16 @@ Describe "Build VIP lock contract" {
         $actionContent | Should -Match "-VipbBuildLockTimeoutSeconds"
         $actionContent | Should -Match "-VipbBuildLockStaleSeconds"
     }
+
+    It "passes updated display metadata to ModifyVIPBDisplayInfo via json file path" {
+        $content = Get-Content -Path $script:buildVipScript -Raw
+        $modifyArgsMatch = [regex]::Match(
+            $content,
+            '(?ms)\$modifyArgs\s*=\s*@\((?<body>.*?)\)\s*if\s*\(-not\s*\[string\]::IsNullOrWhiteSpace\(\$WorktreeRoot\)\)'
+        )
+        $modifyArgsMatch.Success | Should -BeTrue
+        $modifyArgsBody = $modifyArgsMatch.Groups['body'].Value
+        $modifyArgsBody | Should -Match "'-DisplayInformationJsonPath'"
+        $modifyArgsBody | Should -Not -Match "'-DisplayInformationJSON'"
+    }
 }

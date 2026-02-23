@@ -285,8 +285,22 @@ try {
         $jsonObj.'Package Version'.build = $Build
     }
 
-    # Re-convert to a JSON string with a comfortable nesting depth
+    # Re-convert to JSON and persist to a file to avoid long command-line arguments.
     $UpdatedDisplayInformationJSON = $jsonObj | ConvertTo-Json -Depth 5
+    $updatedDisplayInformationPath = Join-Path -Path $LogDirectory -ChildPath 'vipb-display-info-updated.json'
+    try {
+        Set-Content -Path $updatedDisplayInformationPath -Value $UpdatedDisplayInformationJSON -Encoding utf8
+    }
+    catch {
+        $errorObject = [PSCustomObject]@{
+            error      = "Failed to persist updated display information JSON."
+            path       = $updatedDisplayInformationPath
+            exception  = $_.Exception.Message
+            stackTrace = $_.Exception.StackTrace
+        }
+        $errorObject | ConvertTo-Json -Depth 10
+        exit 1
+    }
 
     # 5a) Pre-clean existing VIP in the configured output folder to avoid VIPM error 10
     $vipBaseName = if (-not [string]::IsNullOrWhiteSpace($packageFileName)) {
@@ -332,7 +346,7 @@ $modifyArgs = @(
     '-Build', $Build.ToString(),
     '-Commit', $Commit,
     '-ReleaseNotesFile', $ResolvedReleaseNotesFile.ToString(),
-    '-DisplayInformationJSON', $UpdatedDisplayInformationJSON
+    '-DisplayInformationJsonPath', $updatedDisplayInformationPath
 )
 if (-not [string]::IsNullOrWhiteSpace($WorktreeRoot)) {
     $modifyArgs += @('-WorktreeRoot', $WorktreeRoot)
