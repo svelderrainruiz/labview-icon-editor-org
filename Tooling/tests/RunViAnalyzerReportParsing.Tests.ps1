@@ -39,6 +39,8 @@ Describe 'Run-ViAnalyzer report parsing contract' {
                 (Get-FunctionDefinitionText -Ast $ast -FunctionName 'Get-ViAnalyzerFailureItemList')
                 ''
                 (Get-FunctionDefinitionText -Ast $ast -FunctionName 'Get-OrderedUniqueFilePathList')
+                ''
+                (Get-FunctionDefinitionText -Ast $ast -FunctionName 'Test-IsAllowlistedViAnalyzerFailureItem')
             ) -Encoding utf8
 
         . $harnessPath
@@ -80,5 +82,25 @@ Describe 'Run-ViAnalyzer report parsing contract' {
             'C:\actions-runner\_work\Tooling\Unset Run Icon Editor from Source.vi',
             'C:\actions-runner\_work\Tooling\Mass Compile Runner.vi'
         )
+    }
+
+    It 'allowlists known password-protected testing errors under NI icon API/plugin paths' {
+        $item = [pscustomobject]@{
+            section   = 'testing_errors'
+            file_path = 'C:\actions-runner\_work\repo\resource\plugins\NIIconEditor\Support\IE_Resolve Symbolic Paths.vi'
+            message   = 'Error 1040.  VI is password protected.'
+        }
+
+        (Test-IsAllowlistedViAnalyzerFailureItem -FailureItem $item) | Should -BeTrue
+    }
+
+    It 'does not allowlist unrelated testing errors' {
+        $item = [pscustomobject]@{
+            section   = 'testing_errors'
+            file_path = 'C:\actions-runner\_work\repo\Tooling\Some Helper.vi'
+            message   = 'Error 7. File not found.'
+        }
+
+        (Test-IsAllowlistedViAnalyzerFailureItem -FailureItem $item) | Should -BeFalse
     }
 }
