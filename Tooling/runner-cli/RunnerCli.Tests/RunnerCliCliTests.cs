@@ -703,6 +703,7 @@ public class RunnerCliCliTests
     {
         var repoRoot = FindRepoRoot();
         var repoLabview = GetRepoLabVIEWVersionInfo(repoRoot);
+        var expectedSourceYear = repoLabview.Year;
         var expectedExecutionYear = ResolveExpectedExecutionYear(repoLabview.Year);
         var args = string.Join(' ', new[]
         {
@@ -728,6 +729,7 @@ public class RunnerCliCliTests
         Assert.True(string.IsNullOrWhiteSpace(stdout), $"stdout: {stdout}");
         Assert.Contains("vip build command:", stderr, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Invoke-VipBuild.ps1", stderr, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains($"-LabVIEWVersion {expectedSourceYear}", stderr, StringComparison.OrdinalIgnoreCase);
         Assert.Contains($"-ExecutionLabVIEWYear {expectedExecutionYear}", stderr, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -736,6 +738,7 @@ public class RunnerCliCliTests
     {
         var repoRoot = FindRepoRoot();
         var repoLabview = GetRepoLabVIEWVersionInfo(repoRoot);
+        var expectedSourceYear = repoLabview.Year;
         var expectedExecutionYear = ResolveExpectedExecutionYear(repoLabview.Year);
         var tempDir = Directory.CreateTempSubdirectory("lvie-cli-vip-display");
         var displayInfoPath = Path.Combine(tempDir.FullName, "display-information.json");
@@ -765,6 +768,7 @@ public class RunnerCliCliTests
         Assert.True(string.IsNullOrWhiteSpace(stdout), $"stdout: {stdout}");
         Assert.Contains("vip build command:", stderr, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("-DisplayInformationJsonPath", stderr, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains($"-LabVIEWVersion {expectedSourceYear}", stderr, StringComparison.OrdinalIgnoreCase);
         Assert.Contains($"-ExecutionLabVIEWYear {expectedExecutionYear}", stderr, StringComparison.OrdinalIgnoreCase);
     }
 

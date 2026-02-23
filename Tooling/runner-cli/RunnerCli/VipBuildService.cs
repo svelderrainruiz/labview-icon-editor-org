@@ -55,7 +55,7 @@ public static class VipBuildService
             "-SupportedBitness", options.SupportedBitness,
             "-RepoRoot", repoRoot,
             "-VIPBPath", options.VipbPath,
-            "-LabVIEWVersion", executionYearResolution.SourceVersion.Raw,
+            "-LabVIEWVersion", executionYearResolution.SourceVersion.Year,
             "-ExecutionLabVIEWYear", executionYearResolution.ExecutionYear
         };
 
