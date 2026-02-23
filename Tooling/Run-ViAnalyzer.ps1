@@ -34,7 +34,7 @@ param(
 
     [Parameter(Mandatory = $false)]
     [ValidateRange(1, 5)]
-    [int]$MaxAttempts = 2,
+    [int]$MaxAttempts = 3,
 
     [Parameter(Mandatory = $false)]
     [ValidateRange(0, 120)]
@@ -380,7 +380,8 @@ function Test-ViAnalyzerTransientCliFailure {
         'Error code\s*:\s*-350052',
         'You cannot initialize the logger multiple times',
         'Error code\s*:\s*-350000',
-        'failed to establish a connection with LabVIEW'
+        'failed to establish a connection with LabVIEW',
+        'Call By Reference in RunExecuteOperationVI'
     )
 
     foreach ($pattern in $transientPatterns) {

@@ -121,11 +121,12 @@ Describe 'VI Analyzer contract' {
         (Test-Path -LiteralPath $script:runViAnalyzerPath -PathType Leaf) | Should -BeTrue
 
         $content = Get-Content -Raw -Path $script:runViAnalyzerPath
-        $content | Should -Match '\[int\]\$MaxAttempts\s*=\s*2'
+        $content | Should -Match '\[int\]\$MaxAttempts\s*=\s*3'
         $content | Should -Match '\[int\]\$RetryDelaySeconds\s*=\s*5'
         $content | Should -Match 'function Test-ViAnalyzerTransientCliFailure'
         $content | Should -Match 'You cannot initialize the logger multiple times'
         $content | Should -Match 'failed to establish a connection with LabVIEW'
+        $content | Should -Match 'Call By Reference in RunExecuteOperationVI'
         $content | Should -Match 'function Invoke-CloseLabVIEWSafely'
         $content | Should -Match 'Retrying VI Analyzer task'
         $content | Should -Match 'Transient LabVIEWCLI failure detected'
