@@ -446,18 +446,6 @@ function Get-IconEditorSyncExcludeList {
 
     $excludeRaw = $env:LVIE_ICON_EDITOR_SYNC_EXCLUDE_FILES
     if ([string]::IsNullOrWhiteSpace($excludeRaw)) {
-        $parsedYear = 0
-        if ([int]::TryParse($LabVIEWYear, [ref]$parsedYear) -and $parsedYear -le 2020) {
-            # LV2020 cannot compile these source variants reliably in headless App Builder;
-            # preserve install-baseline copies when present.
-            $excludeRaw = @(
-                'NIIconEditor\Class\FakedArray\Misc\Process Template Graphics.vi',
-                'NIIconEditor\Class\Tools\Fill.vi'
-            ) -join ';'
-        }
-    }
-
-    if ([string]::IsNullOrWhiteSpace($excludeRaw)) {
         return @()
     }
 
