@@ -620,10 +620,10 @@ foreach ($task in $tasks) {
             attempt_count   = $attempt
             max_attempts    = $maxAttempts
             retry_applied   = ($attempt -gt 1)
-            attempts        = @($attemptResults)
+            attempts        = $attemptResults.ToArray()
             succeeded       = $taskSucceeded
             counts          = [pscustomobject]$counts
-            failure_reasons = @($failureReasons)
+            failure_reasons = $failureReasons.ToArray()
             failure_items   = @($failureItems)
             failure_file_paths = @($failureFilePaths)
         }) | Out-Null
