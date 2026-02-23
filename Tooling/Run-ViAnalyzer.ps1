@@ -38,7 +38,11 @@ param(
 
     [Parameter(Mandatory = $false)]
     [ValidateRange(0, 30)]
-    [int]$TransientRetryDelaySeconds = 5
+    [int]$TransientRetryDelaySeconds = 5,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateSet('TRUE', 'FALSE')]
+    [string]$LabVIEWCliLogToConsole = 'FALSE'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -504,6 +508,7 @@ Write-Host ("Resolved LabVIEW: raw={0}, year={1}, bitness={2}" -f $resolvedLabVI
 Write-Host ("LabVIEW executable: {0}" -f $labviewExecutablePath)
 Write-Host ("VI Analyzer install root: {0}" -f $viAnalyzerInstall.analyzer_root)
 Write-Host ("Using LabVIEWCLI port {0} (source: {1})" -f $portResolution.PortNumber, $portResolution.Source)
+Write-Host ("LabVIEWCLI LogToConsole: {0}" -f $LabVIEWCliLogToConsole)
 if ($portResolution.RemediationEnabled -and $portResolution.RemediationApplied) {
     Write-Warning ("LabVIEWCLI port contract remediation modified LabVIEW.ini at {0}" -f $portResolution.IniPath)
 } elseif ($portResolution.RemediationEnabled) {
@@ -545,7 +550,7 @@ foreach ($task in $tasks) {
         '-ConfigPath', $configPathResolved,
         '-ReportPath', $reportPath,
         '-ReportSaveType', 'ASCII',
-        '-LogToConsole', 'TRUE',
+        '-LogToConsole', $LabVIEWCliLogToConsole,
         '-Headless'
     )
 
