@@ -2005,6 +2005,7 @@ jobs:
         uses: ./.github/actions/lvie-job-setup
         with:
           checkout: 'false'
+          acquire_lock: 'true'
           bitness: 32
           create_worktree: 'true'
           worktree_root_mode: runner_temp
@@ -2118,6 +2119,7 @@ jobs:
         uses: ./.github/actions/lvie-job-setup
         with:
           checkout: 'false'
+          acquire_lock: 'true'
           bitness: 64
           create_worktree: 'true'
           worktree_root_mode: runner_temp
