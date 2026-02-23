@@ -1603,8 +1603,8 @@ function Invoke-RunnerCliCommand {
         throw "runner-cli was not found and project fallback is unavailable at $runnerCliProject"
     }
 
-    Write-Host ("{0}: dotnet run --project {1} -- {2}" -f $Label, (Format-RunnerCliArgument -Value $runnerCliProject), (($Arguments | ForEach-Object { Format-RunnerCliArgument -Value $_ }) -join ' '))
-    & dotnet run --project $runnerCliProject --configuration Release -- @Arguments
+    Write-Host ("{0}: runner-cli in-place ({1}) -- {2}" -f $Label, (Format-RunnerCliArgument -Value $runnerCliProject), (($Arguments | ForEach-Object { Format-RunnerCliArgument -Value $_ }) -join ' '))
+    & pwsh -NoProfile -File (Join-Path $RepoRoot 'Tooling\Invoke-RunnerCli.ps1') -RunnerCliProject $runnerCliProject -- @Arguments
 }
 
 function Initialize-RunnerContractIfNeeded {
@@ -2589,12 +2589,4 @@ finally {
     "{0},{1},{2},{3}" -f $runTimestamp, $runStatus, $runDuration, ($commandLine -replace ',', ' ') | Add-Content -Path $script:RunHistoryPath
     Pop-Location
 }
-
-
-
-
-
-
-
-
 

@@ -163,36 +163,36 @@ runs:
           }
         }
         $runnerCliProject = Join-Path $repoRoot 'Tooling/runner-cli/RunnerCli/RunnerCli.csproj'
+        $runnerCliInvoker = Join-Path $repoRoot 'Tooling/Invoke-RunnerCli.ps1'
         $useRunnerCliBinary = (-not [string]::IsNullOrWhiteSpace($runnerCliPath)) -and (Test-Path $runnerCliPath)
-        $canUseRunnerCli = $useRunnerCliBinary -or ((Get-Command dotnet -ErrorAction SilentlyContinue) -and (Test-Path $runnerCliProject))
+        $canUseRunnerCliInPlace = (Get-Command dotnet -ErrorAction SilentlyContinue) -and (Test-Path $runnerCliProject) -and (Test-Path $runnerCliInvoker)
+        $canUseRunnerCli = $canUseRunnerCliInPlace -or $useRunnerCliBinary
         if (-not $canUseRunnerCli -and $requireRunnerCli) {
-          throw "runner-cli is required but unavailable. Set LVIE_RUNNER_CLI_PATH or enable dotnet build for Tooling/runner-cli."
+          throw "runner-cli is required but unavailable. Ensure Tooling/Invoke-RunnerCli.ps1 + runner-cli project are present, or set LVIE_RUNNER_CLI_PATH."
         }
         if ($canUseRunnerCli) {
-          if ($useRunnerCliBinary -and -not $IsWindows) {
-            chmod +x $runnerCliPath
-          }
-          Write-Host "Using runner-cli missing-in-project (incremental migration)."
-          $args = @(
+          Write-Host "Using runner-cli missing-in-project."
+          $runnerCliArgs = @(
             'missing-in-project',
             '--repo-root', $repoRoot,
             '--arch', '${{ inputs.arch }}',
             '--project-file', $projectFile
           )
           if (-not [string]::IsNullOrWhiteSpace($lvInput)) {
-            $args += '--labview'
-            $args += $lvInput
+            $runnerCliArgs += '--labview'
+            $runnerCliArgs += $lvInput
           }
-          if ($useRunnerCliBinary) {
-            & $runnerCliPath @args
+          if ($canUseRunnerCliInPlace) {
+            & pwsh -NoProfile -File $runnerCliInvoker -RunnerCliProject $runnerCliProject -- @runnerCliArgs
           } else {
-            $dotnetArgs = @(
-              'run',
-              '--project', $runnerCliProject,
-              '--configuration', 'Release',
-              '--'
-            ) + $args
-            & dotnet @dotnetArgs
+            if ($useRunnerCliBinary -and -not $IsWindows) {
+              chmod +x $runnerCliPath
+            }
+            if ($runnerCliPath -like '*.dll') {
+              & dotnet $runnerCliPath @runnerCliArgs
+            } else {
+              & $runnerCliPath @runnerCliArgs
+            }
           }
           $exitCode = $LASTEXITCODE
           if ($exitCode -ne 0 -and $exitCode -ne $null) {

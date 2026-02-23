@@ -137,6 +137,14 @@ if ($script:findings.Count -eq 0) {
         -Pattern 'Tooling/runner-cli/RunnerCli/RunnerCli\.csproj' `
         -Code 'missing-required-pattern' `
         -Message 'ci.yml must resolve runner-cli project path.'
+    Test-Pattern -FilePath $ciPath -Content $ciContent `
+        -Pattern 'Invoke-RunnerCli\.ps1' `
+        -Code 'missing-required-pattern' `
+        -Message 'ci.yml must route runner-cli commands through Tooling/Invoke-RunnerCli.ps1.'
+    Test-Pattern -FilePath $ciCompositePath -Content $ciCompositeContent `
+        -Pattern 'Invoke-RunnerCli\.ps1' `
+        -Code 'missing-required-pattern' `
+        -Message 'ci.yml must route runner-cli commands through Tooling/Invoke-RunnerCli.ps1.'
 
     Test-Pattern -FilePath $ciPath -Content $ciContent `
         -Pattern "'lunit', 'run'" `
@@ -225,6 +233,16 @@ if ($script:findings.Count -eq 0) {
         -Pattern 'runlabview-windows\.ps1' `
         -Code 'forbidden-legacy-call' `
         -Message 'ci.yml must not directly invoke runlabview-windows.ps1 in container PPL lanes after Wave 2 migration.' `
+        -MustNotExist
+    Test-Pattern -FilePath $ciPath -Content $ciContent `
+        -Pattern 'runner-cli\.exe' `
+        -Code 'forbidden-legacy-call' `
+        -Message 'ci.yml must not invoke runner-cli.exe directly; use Tooling/Invoke-RunnerCli.ps1 in-place execution.' `
+        -MustNotExist
+    Test-Pattern -FilePath $ciCompositePath -Content $ciCompositeContent `
+        -Pattern 'runner-cli\.exe' `
+        -Code 'forbidden-legacy-call' `
+        -Message 'ci.yml must not invoke runner-cli.exe directly; use Tooling/Invoke-RunnerCli.ps1 in-place execution.' `
         -MustNotExist
     $allowedExecutionPolicies = @('RemoteSigned', 'AllSigned', 'Restricted', 'Undefined', 'Default')
     Test-ExecutionPolicyAllowlist -FilePath $ciPath -Content $ciContent -Allowlist $allowedExecutionPolicies

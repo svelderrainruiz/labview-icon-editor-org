@@ -126,15 +126,14 @@ runs:
           }
         }
         $runnerCliProject = Join-Path $env:GITHUB_WORKSPACE 'Tooling/runner-cli/RunnerCli/RunnerCli.csproj'
+        $runnerCliInvoker = Join-Path $env:GITHUB_WORKSPACE 'Tooling/Invoke-RunnerCli.ps1'
         $useRunnerCliBinary = (-not [string]::IsNullOrWhiteSpace($runnerCliPath)) -and (Test-Path $runnerCliPath)
-        $canUseRunnerCli = $useRunnerCliBinary -or ((Get-Command dotnet -ErrorAction SilentlyContinue) -and (Test-Path $runnerCliProject))
+        $canUseRunnerCliInPlace = (Get-Command dotnet -ErrorAction SilentlyContinue) -and (Test-Path $runnerCliProject) -and (Test-Path $runnerCliInvoker)
+        $canUseRunnerCli = $canUseRunnerCliInPlace -or $useRunnerCliBinary
         if (-not $canUseRunnerCli -and $needsRunnerCli) {
-          throw "runner-cli is required but unavailable. Set LVIE_RUNNER_CLI_PATH or enable dotnet build for Tooling/runner-cli."
+          throw "runner-cli is required but unavailable. Ensure Tooling/Invoke-RunnerCli.ps1 + runner-cli project are present, or set LVIE_RUNNER_CLI_PATH."
         }
         if ($canUseRunnerCli) {
-          if ($useRunnerCliBinary -and -not $IsWindows) {
-            chmod +x $runnerCliPath
-          }
           Write-Host "Using runner-cli pylavi scan (incremental migration)."
           $scanArgs = @(
             'pylavi', 'scan',
@@ -155,16 +154,17 @@ runs:
           if ('${{ inputs.report_only }}' -eq 'true') {
             $scanArgs += '--report-only'
           }
-          if ($useRunnerCliBinary) {
-            & $runnerCliPath @scanArgs
+          if ($canUseRunnerCliInPlace) {
+            & pwsh -NoProfile -File $runnerCliInvoker -RunnerCliProject $runnerCliProject -- @scanArgs
           } else {
-            $dotnetArgs = @(
-              'run',
-              '--project', $runnerCliProject,
-              '--configuration', 'Release',
-              '--'
-            ) + $scanArgs
-            & dotnet @dotnetArgs
+            if ($useRunnerCliBinary -and -not $IsWindows) {
+              chmod +x $runnerCliPath
+            }
+            if ($runnerCliPath -like '*.dll') {
+              & dotnet $runnerCliPath @scanArgs
+            } else {
+              & $runnerCliPath @scanArgs
+            }
           }
           $scanExit = $LASTEXITCODE
 
@@ -186,16 +186,14 @@ runs:
             if ($failOnDelta) {
               $summaryArgs += '--fail-on-delta'
             }
-            if ($useRunnerCliBinary) {
-              & $runnerCliPath @summaryArgs | Out-Host
+            if ($canUseRunnerCliInPlace) {
+              & pwsh -NoProfile -File $runnerCliInvoker -RunnerCliProject $runnerCliProject -- @summaryArgs | Out-Host
             } else {
-              $dotnetSummaryArgs = @(
-                'run',
-                '--project', $runnerCliProject,
-                '--configuration', 'Release',
-                '--'
-              ) + $summaryArgs
-              & dotnet @dotnetSummaryArgs | Out-Host
+              if ($runnerCliPath -like '*.dll') {
+                & dotnet $runnerCliPath @summaryArgs | Out-Host
+              } else {
+                & $runnerCliPath @summaryArgs | Out-Host
+              }
             }
           }
 
