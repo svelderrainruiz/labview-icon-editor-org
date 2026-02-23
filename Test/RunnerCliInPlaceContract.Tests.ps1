@@ -22,8 +22,10 @@ Describe "Runner CLI in-place contract" {
         $script:repoRoot = Find-RepoRoot -StartPath $PSScriptRoot
         $script:runnerBootstrapPath = Join-Path $script:repoRoot '.github\actions\runner-bootstrap\action.yml'
         $script:jobSetupPath = Join-Path $script:repoRoot '.github\actions\lvie-job-setup\action.yml'
+        $script:ciWorkflowPath = Join-Path $script:repoRoot '.github\workflows\ci.yml'
         $script:runnerBootstrap = Get-Content -Path $script:runnerBootstrapPath -Raw
         $script:jobSetup = Get-Content -Path $script:jobSetupPath -Raw
+        $script:ciWorkflow = Get-Content -Path $script:ciWorkflowPath -Raw
     }
 
     It "builds and invokes runner-cli in place via dotnet" {
@@ -40,5 +42,12 @@ Describe "Runner CLI in-place contract" {
 
     It "disables runner-cli artifact download by default in job setup" {
         $script:jobSetup | Should -Match '(?ms)download_runner_cli:\s*.*?default:\s*''false'''
+    }
+
+    It "builds runner-cli in place for Build VI Package workflow step" {
+        $script:ciWorkflow | Should -Match 'Build VI Package \(LV 64-bit\)'
+        $script:ciWorkflow | Should -Match 'Using in-place runner-cli project at'
+        $script:ciWorkflow | Should -Match '& dotnet run --project \$runnerCliProject --configuration Release -- @runnerCliArgs'
+        $script:ciWorkflow | Should -Not -Match 'Using prebuilt runner-cli at'
     }
 }

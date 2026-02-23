@@ -2372,27 +2372,14 @@ jobs:
       - name: Build VI Package (LV 64-bit)
         shell: pwsh
         run: |
-          $runnerCliPath = $env:LVIE_RUNNER_CLI_PATH
-          $ensureRunnerCliScript = @(
-            (Join-Path $env:REPO_ROOT 'Tooling/Ensure-RunnerCli.ps1'),
-            (Join-Path $env:GITHUB_WORKSPACE 'Tooling/Ensure-RunnerCli.ps1')
-          ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path -Path $_ -PathType Leaf) } | Select-Object -First 1
-          if ($ensureRunnerCliScript) {
-            $ensureResult = & $ensureRunnerCliScript -RepoRoot $env:REPO_ROOT -RunnerCliPath $runnerCliPath -Require
-            if ($ensureResult -and -not [string]::IsNullOrWhiteSpace($ensureResult.Path)) {
-              $runnerCliPath = $ensureResult.Path
-            }
-          }
-          $usePrebuiltRunnerCli = -not [string]::IsNullOrWhiteSpace($runnerCliPath) -and (Test-Path -Path $runnerCliPath -PathType Leaf)
           $runnerCliProject = @(
             (Join-Path $env:REPO_ROOT 'Tooling/runner-cli/RunnerCli/RunnerCli.csproj'),
             (Join-Path $env:GITHUB_WORKSPACE 'Tooling/runner-cli/RunnerCli/RunnerCli.csproj')
           ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path -Path $_ -PathType Leaf) } | Select-Object -First 1
-          if ($usePrebuiltRunnerCli) {
-            Write-Host ("Using prebuilt runner-cli at {0}" -f $runnerCliPath)
-          } elseif (-not $runnerCliProject) {
-            throw "runner-cli unavailable: no usable LVIE_RUNNER_CLI_PATH and no runner-cli project found under REPO_ROOT/GITHUB_WORKSPACE."
+          if (-not $runnerCliProject) {
+            throw "runner-cli project not found under REPO_ROOT/GITHUB_WORKSPACE."
           }
+          Write-Host ("Using in-place runner-cli project at {0}" -f $runnerCliProject)
 
           $displayInformationJsonPath = '${{ steps.display-info.outputs.display_information_json_path }}'
           if ([string]::IsNullOrWhiteSpace($displayInformationJsonPath) -or -not (Test-Path -Path $displayInformationJsonPath -PathType Leaf)) {
@@ -2415,11 +2402,7 @@ jobs:
             '--display-information-json-path', $displayInformationJsonPath,
             '--vipm-timeout-seconds', $env:LVIE_VIPM_TIMEOUT_SECONDS
           )
-          if ($usePrebuiltRunnerCli) {
-            & $runnerCliPath @runnerCliArgs
-          } else {
-            & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs
-          }
+          & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
