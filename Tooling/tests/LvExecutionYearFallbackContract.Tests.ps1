@@ -9,10 +9,12 @@ Describe 'LabVIEW execution-year fallback contract' {
         $script:pplBuildScriptPath = Join-Path $script:repoRoot '.github\actions\build-lvlibp\BuildProjectSpec.ps1'
         $script:invokeVipBuildPath = Join-Path $script:repoRoot 'Tooling\Invoke-VipBuild.ps1'
         $script:buildVipScriptPath = Join-Path $script:repoRoot '.github\actions\build-vip\build_vip.ps1'
+        $script:labviewExeResolverPath = Join-Path $script:repoRoot 'Tooling\support\LabVIEWExecutablePath.ps1'
 
         $script:pplBuildScriptContent = Get-Content -Path $script:pplBuildScriptPath -Raw
         $script:invokeVipBuildContent = Get-Content -Path $script:invokeVipBuildPath -Raw
         $script:buildVipScriptContent = Get-Content -Path $script:buildVipScriptPath -Raw
+        $script:labviewExeResolverContent = Get-Content -Path $script:labviewExeResolverPath -Raw
     }
 
     It 'BuildProjectSpec accepts execution-year override and keeps source version contract' {
@@ -28,6 +30,7 @@ Describe 'LabVIEW execution-year fallback contract' {
         $script:pplBuildScriptContent | Should -Match 'Get-IconEditorSyncExcludeList -LabVIEWYear \$executionLabVIEWYear'
         $script:pplBuildScriptContent | Should -Match '\$supportsHeadlessBuildSpec = \[int\]::TryParse\(\[string\]\$executionLabVIEWYear'
         $script:pplBuildScriptContent | Should -Match 'Invoke-CloseLabVIEWSafely -Version \$executionLabVIEWYear'
+        $script:labviewExeResolverContent | Should -Not -Match '(?m)^\s*#Requires\s+-Version'
     }
 
     It 'Invoke-VipBuild forwards execution-year override to build_vip script' {
