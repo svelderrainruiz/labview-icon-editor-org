@@ -5,6 +5,40 @@ namespace RunnerCli.Tests;
 public class LabVIEWExecutionYearCompatibilityServiceTests
 {
     [Fact]
+    public void Resolve_honors_execution_year_override_env_var()
+    {
+        using var repoFixture = CreateRepoFixture("20.0");
+        using var envOverride = new EnvironmentVariableOverride(
+            LabVIEWExecutionYearCompatibilityService.ExecutionYearOverrideEnvVar,
+            "2020");
+
+        var result = LabVIEWExecutionYearCompatibilityService.Resolve(
+            sourceLabviewVersion: "20.0",
+            repoRoot: repoFixture.RepoRoot,
+            commandLabel: "ppl build");
+
+        Assert.Equal("20.0", result.SourceVersion.Raw);
+        Assert.Equal("2020", result.SourceVersion.Year);
+        Assert.Equal("2020", result.ExecutionYear);
+        Assert.False(result.CompatMappingApplied);
+    }
+
+    [Fact]
+    public void Resolve_throws_on_invalid_execution_year_override_env_var()
+    {
+        using var repoFixture = CreateRepoFixture("20.0");
+        using var envOverride = new EnvironmentVariableOverride(
+            LabVIEWExecutionYearCompatibilityService.ExecutionYearOverrideEnvVar,
+            "twenty-twenty");
+
+        Assert.Throws<InvalidOperationException>(() =>
+            LabVIEWExecutionYearCompatibilityService.Resolve(
+                sourceLabviewVersion: "20.0",
+                repoRoot: repoFixture.RepoRoot,
+                commandLabel: "ppl build"));
+    }
+
+    [Fact]
     public void Resolve_maps_lv2020_source_to_lv2026_execution_year()
     {
         using var repoFixture = CreateRepoFixture("20.0");
@@ -80,6 +114,24 @@ public class LabVIEWExecutionYearCompatibilityServiceTests
             {
                 // Best-effort cleanup.
             }
+        }
+    }
+
+    private sealed class EnvironmentVariableOverride : IDisposable
+    {
+        private readonly string _name;
+        private readonly string? _originalValue;
+
+        public EnvironmentVariableOverride(string name, string? value)
+        {
+            _name = name;
+            _originalValue = Environment.GetEnvironmentVariable(name);
+            Environment.SetEnvironmentVariable(name, value);
+        }
+
+        public void Dispose()
+        {
+            Environment.SetEnvironmentVariable(_name, _originalValue);
         }
     }
 }
