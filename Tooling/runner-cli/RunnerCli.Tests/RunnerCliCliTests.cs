@@ -796,7 +796,7 @@ public class RunnerCliCliTests
         Assert.Contains("ppl build command:", stderr, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("BuildProjectSpec.ps1", stderr, StringComparison.OrdinalIgnoreCase);
         Assert.Contains($"-ExecutionLabVIEWYear {expectedExecutionYear}", stderr, StringComparison.OrdinalIgnoreCase);
-        AssertUsesWindowsPowerShellHost(stderr);
+        AssertUsesWindowsPowerShellHost(stderr, allowPwshFallback: true);
     }
 
     [Fact]
@@ -819,7 +819,7 @@ public class RunnerCliCliTests
         Assert.True(string.IsNullOrWhiteSpace(stdout), $"stdout: {stdout}");
         Assert.Contains("dev-mode prepare-source command:", stderr, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Prepare_LabVIEW_source.ps1", stderr, StringComparison.OrdinalIgnoreCase);
-        AssertUsesWindowsPowerShellHost(stderr);
+        AssertUsesWindowsPowerShellHost(stderr, allowPwshFallback: true);
     }
 
     [Fact]
@@ -842,7 +842,7 @@ public class RunnerCliCliTests
         Assert.True(string.IsNullOrWhiteSpace(stdout), $"stdout: {stdout}");
         Assert.Contains("dev-mode restore-source command:", stderr, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("RestoreSetupLVSource.ps1", stderr, StringComparison.OrdinalIgnoreCase);
-        AssertUsesWindowsPowerShellHost(stderr);
+        AssertUsesWindowsPowerShellHost(stderr, allowPwshFallback: true);
     }
 
     [Fact]
@@ -1247,9 +1247,14 @@ public class RunnerCliCliTests
         return false;
     }
 
-    private static void AssertUsesWindowsPowerShellHost(string commandOutput)
+    private static void AssertUsesWindowsPowerShellHost(string commandOutput, bool allowPwshFallback = false)
     {
         if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        if (allowPwshFallback && commandOutput.Contains("pwsh", StringComparison.OrdinalIgnoreCase))
         {
             return;
         }

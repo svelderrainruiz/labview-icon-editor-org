@@ -1,4 +1,3 @@
-#Requires -Version 7.0
 <#
 .SYNOPSIS
     Resolve LabVIEW version details from an input string or .lvversion.

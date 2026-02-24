@@ -1,4 +1,3 @@
-#Requires -Version 7.0
 <#[
 .SYNOPSIS
     Shared preflight for local entrypoints.
@@ -90,9 +89,18 @@ function Get-RepoRelativePath {
 
     try {
         $repoFull = [System.IO.Path]::GetFullPath($RepoRoot)
-        $relative = [System.IO.Path]::GetRelativePath($repoFull, $Path)
-        if (-not [string]::IsNullOrWhiteSpace($relative)) {
-            return $relative
+        if ([System.IO.Path].GetMethod('GetRelativePath', [type[]]@([string], [string]))) {
+            $relative = [System.IO.Path]::GetRelativePath($repoFull, $Path)
+            if (-not [string]::IsNullOrWhiteSpace($relative)) {
+                return $relative
+            }
+        } else {
+            $uriRepo = New-Object System.Uri(($repoFull.TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar))
+            $uriPath = New-Object System.Uri([System.IO.Path]::GetFullPath($Path))
+            $relative = [System.Uri]::UnescapeDataString($uriRepo.MakeRelativeUri($uriPath).ToString()).Replace('/', '\')
+            if (-not [string]::IsNullOrWhiteSpace($relative)) {
+                return $relative
+            }
         }
     } catch {
         return $Path

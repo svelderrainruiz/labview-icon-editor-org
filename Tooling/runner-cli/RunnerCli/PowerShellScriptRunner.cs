@@ -42,7 +42,8 @@ internal static class PowerShellScriptRunner
         args.AddRange(scriptArguments);
         ValidateExecutionPolicyArgs(args, commandLabel);
 
-        var powerShellExecutable = PowerShellHostResolver.ResolveExecutable();
+        var preferWindowsPowerShell = !ScriptLikelyRequiresPwsh(scriptPath);
+        var powerShellExecutable = PowerShellHostResolver.ResolveExecutable(preferWindowsPowerShell);
         var powerShellDisplayName = PowerShellHostResolver.GetDisplayName(powerShellExecutable);
         var commandLine = $"{QuoteIfNeeded(powerShellDisplayName)} {string.Join(' ', args.Select(QuoteIfNeeded))}";
         Console.Error.WriteLine($"{commandLabel} command: {commandLine}");
@@ -85,6 +86,32 @@ internal static class PowerShellScriptRunner
         return value.Contains(' ', StringComparison.Ordinal)
             ? $"\"{value}\""
             : value;
+    }
+
+    private static bool ScriptLikelyRequiresPwsh(string scriptPath)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(scriptPath) || !File.Exists(scriptPath))
+        {
+            return false;
+        }
+
+        try
+        {
+            var content = File.ReadAllText(scriptPath);
+            return content.Contains("#Requires -Version 7.0", StringComparison.OrdinalIgnoreCase)
+                || content.Contains("Invoke-Preflight.ps1", StringComparison.OrdinalIgnoreCase)
+                || content.Contains("Tooling\\support\\LabVIEWVersion.ps1", StringComparison.OrdinalIgnoreCase)
+                || content.Contains("Tooling/support/LabVIEWVersion.ps1", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static void ValidateExecutionPolicyArgs(IReadOnlyList<string> args, string commandLabel)

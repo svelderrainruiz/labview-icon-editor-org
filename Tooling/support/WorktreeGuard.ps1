@@ -1,4 +1,3 @@
-#Requires -Version 7.0
 <#[
 .SYNOPSIS
     Shared guardrails for enforcing short-path worktree usage.

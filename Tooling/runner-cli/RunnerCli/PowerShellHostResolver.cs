@@ -10,6 +10,14 @@ internal static class PowerShellHostResolver
         "pwsh"
     };
 
+    private static readonly string[] WindowsPwshPreferredHosts =
+    {
+        "pwsh.exe",
+        "pwsh",
+        "powershell.exe",
+        "powershell"
+    };
+
     private static readonly string[] NonWindowsPreferredHosts =
     {
         "pwsh",
@@ -18,10 +26,10 @@ internal static class PowerShellHostResolver
         "powershell.exe"
     };
 
-    public static string ResolveExecutable()
+    public static string ResolveExecutable(bool preferWindowsPowerShell = true)
     {
         var candidates = OperatingSystem.IsWindows()
-            ? WindowsPreferredHosts
+            ? (preferWindowsPowerShell ? WindowsPreferredHosts : WindowsPwshPreferredHosts)
             : NonWindowsPreferredHosts;
 
         foreach (var candidate in candidates)

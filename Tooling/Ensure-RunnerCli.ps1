@@ -1,4 +1,3 @@
-#Requires -Version 7.0
 <#
 .SYNOPSIS
     Ensures runner-cli is available and exports LVIE_RUNNER_CLI_PATH.
