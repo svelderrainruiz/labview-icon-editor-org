@@ -1,4 +1,3 @@
-#Requires -Version 7.0
 <#
 .SYNOPSIS
     Resolve LabVIEW executable path for a version and bitness.
