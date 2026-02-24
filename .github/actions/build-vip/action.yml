@@ -161,7 +161,9 @@ runs:
           -Build ${{ inputs.build }} `
           -Commit "${{ inputs.commit }}" `
           -ReleaseNotesFile "${{ inputs.release_notes_file }}" `
-          -DisplayInformationJSON $displayInformationJson
+          -DisplayInformationJSON $displayInformationJson `
+          -VipbBuildLockTimeoutSeconds ${{ inputs.vipb_build_lock_timeout_seconds }} `
+          -VipbBuildLockStaleSeconds ${{ inputs.vipb_build_lock_stale_seconds }}
 
     - name: Dump VIPM build logs on failure
       if: failure()
@@ -317,6 +319,15 @@ inputs:
     description: 'If true, fail when multiple .vip files exist after the build step'
     required: false
     default: 'true'
+  vipb_build_lock_timeout_seconds:
+    description: 'Timeout waiting for VIPB build lock acquisition.'
+    required: false
+    default: '180'
+  vipb_build_lock_stale_seconds:
+    description: 'Age at which an existing VIPB build lock is treated as stale and recoverable.'
+    required: false
+    default: '300'
+
 
 
 

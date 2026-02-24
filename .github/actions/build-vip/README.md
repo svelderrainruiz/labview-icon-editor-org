@@ -17,6 +17,20 @@ Runs **`build_vip.ps1`** to update a `.vipb` file's display info and build the V
 | `commit` | **Yes** | `abcdef` | Commit identifier. |
 | `release_notes_file` | **Yes** | `Tooling/deployment/release_notes.md` | Release notes file. |
 | `display_information_json` | **Yes** | `'{}'` | JSON for VIPB display information. |
+| `vipb_build_lock_timeout_seconds` | No (defaults to `180`) | `180` | Timeout waiting for per-VIPB lock acquisition. |
+| `vipb_build_lock_stale_seconds` | No (defaults to `300`) | `300` | Lock age threshold used to recover stale lock folders. |
+
+## Collision Guardrail
+- Builds acquire a per-`vipb` lock keyed by normalized VIPB path.
+- The lock root resolves in this order: `LVIE_LOCK_ROOT`, `RUNNER_TEMP`, `TEMP`, then `<repo>\builds\locks`.
+- If an existing lock is older than `vipb_build_lock_stale_seconds`, it is treated as stale and replaced.
+
+## VIPM Port Guardrail
+- Before invoking `vipm build`, the action validates VIPM target port mapping against `LabVIEW.ini` (`server.tcp.port`) for the selected LabVIEW version/bitness.
+- The build fails fast on mismatch to prevent package operations from targeting the wrong LabVIEW instance.
+- Manual check/fix helper:
+  - `pwsh -NoProfile -File .\Tooling\Assert-VipmPortAlignment.ps1 -LabVIEWVersion 2020 -LabVIEWBitness 32`
+  - `pwsh -NoProfile -File .\Tooling\Assert-VipmPortAlignment.ps1 -LabVIEWVersion 2020 -LabVIEWBitness 32 -Fix`
 
 ## Quick-start
 ```yaml
@@ -32,6 +46,8 @@ Runs **`build_vip.ps1`** to update a `.vipb` file's display info and build the V
     commit: ${{ github.sha }}
     release_notes_file: Tooling/deployment/release_notes.md
     display_information_json: '{}'
+    vipb_build_lock_timeout_seconds: 180
+    vipb_build_lock_stale_seconds: 300
 ```
 
 ## License

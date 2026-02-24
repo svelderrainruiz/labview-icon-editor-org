@@ -12,6 +12,7 @@ Describe 'VI Analyzer contract' {
         $script:ciPath = Join-Path $script:repoRoot '.github\workflows\ci.yml'
         $script:parityPath = Join-Path $script:repoRoot '.github\workflows\labview-parity.yml'
         $script:runViAnalyzerPath = Join-Path $script:repoRoot 'Tooling\Run-ViAnalyzer.ps1'
+        $script:runViAnalyzerWindowsPath = Join-Path $script:repoRoot 'Tooling\container-parity\run-vi-analyzer-windows.ps1'
     }
 
     It 'defines exactly three deterministic VI Analyzer tasks' {
@@ -56,31 +57,85 @@ Describe 'VI Analyzer contract' {
         }
     }
 
-    It 'wires vi-analyzer into parity ownership only (no duplicate CI lane)' {
+    It 'wires vi-analyzer into CI self-hosted execution and parity container ownership' {
         (Test-Path -LiteralPath $script:ciPath -PathType Leaf) | Should -BeTrue
         (Test-Path -LiteralPath $script:parityPath -PathType Leaf) | Should -BeTrue
 
         $ciContent = Get-Content -Raw -Path $script:ciPath
         $ciContent | Should -Not -Match '(?ms)^\s*container-contract:\s*$'
-        $ciContent | Should -Not -Match '(?ms)^  vi-analyzer:\s*$'
-        $ciContent | Should -Not -Match '(?ms)publish-gate:\s*.*?needs:\s*.*?\n\s*-\s*vi-analyzer\s*$'
-        $ciContent | Should -Not -Match '(?ms)pipeline-contract:\s*.*?needs:\s*.*?\n\s*-\s*vi-analyzer\s*$'
-        $ciContent | Should -Not -Match '(?ms)\$requiredCommon\s*=\s*@\(\s*.*?''vi-analyzer'''
+        $ciContent | Should -Match '(?ms)^  vi-analyzer:\s*$'
+        $viAnalyzerBlockMatch = [regex]::Match(
+            $ciContent,
+            '(?ms)^\s{2}vi-analyzer:\s*$.*?(?=^\s{2}[A-Za-z0-9_-]+:\s*$|\z)'
+        )
+        $viAnalyzerBlockMatch.Success | Should -BeTrue
+        $viAnalyzerBlock = $viAnalyzerBlockMatch.Value
+        $viAnalyzerBlock | Should -Match 'name:\s*VI Analyzer Gate \(LV \${{\s*needs\.version-gate\.outputs\.raw\s*}} \${{\s*matrix\.bitness_label\s*}}\)'
+        $viAnalyzerBlock | Should -Match 'needs:\s*\[\s*run-metadata,\s*prerelease-context,\s*version-gate,\s*apply-deps-64,\s*apply-deps-32\s*\]'
+        $viAnalyzerBlock | Should -Match 'LVIE_REMEDIATE_LABVIEWCLI_PORT_CONTRACT:\s*\${{\s*vars\.LVIE_REMEDIATE_LABVIEWCLI_PORT_CONTRACT\s*\|\|\s*''1''\s*}}'
+        $viAnalyzerBlock | Should -Match 'Tooling/Run-ViAnalyzer\.ps1'
+        $viAnalyzerBlock | Should -Not -Match "(?m)^\s*if:\s*\$\{\{\s*needs\.prerelease-context\.outputs\.ci_profile != 'release-priority'\s*\}\}"
+        $ciContent | Should -Match '(?ms)^  publish-gate:\s*.*?\n\s*-\s*vi-analyzer\s*$'
+        $ciContent | Should -Match '(?ms)^  pipeline-contract:\s*.*?\n\s*-\s*vi-analyzer\s*$'
+        $ciContent | Should -Match '(?ms)\$requiredFullValidation\s*=\s*@\(\s*.*?''vi-analyzer'''
+        $releasePriorityViAnalyzerRequiredCount = [regex]::Matches(
+            $ciContent,
+            '(?ms)''release-priority''\s*=\s*@\(\$requiredCommon\s*\+\s*@\(''vi-analyzer''\)\)'
+        ).Count
+        $releasePriorityViAnalyzerRequiredCount | Should -BeGreaterOrEqual 2
 
         $parityContent = Get-Content -Raw -Path $script:parityPath
-        $parityContent | Should -Match '(?ms)^  vi-analyzer-linux:\s*$'
-        $parityContent | Should -Match '(?ms)^  vi-analyzer-linux:\s*.*?name:\s*VI Analyzer Linux container \${{\s*needs\.resolve-parity-context\.outputs\.lvcontainer_raw\s*}}'
-        $parityContent | Should -Match '(?ms)^  vi-analyzer-linux:\s*.*?LVIE_CONTAINER_CONTRACT_TAG:\s*\${{\s*needs\.resolve-parity-context\.outputs\.lvcontainer_linux_tag\s*}}'
-        $parityContent | Should -Match '(?ms)^  vi-analyzer-linux:\s*.*?LVIE_VI_ANALYZER_LABVIEW_YEAR:\s*\${{\s*needs\.resolve-parity-context\.outputs\.lvcontainer_linux_year\s*}}'
-        $parityContent | Should -Match '(?ms)^  vi-analyzer-linux:\s*.*?run-vi-analyzer-linux\.sh'
+        $parityContent | Should -Not -Match '(?ms)^  vi-analyzer-linux:\s*$'
+        $parityContent | Should -Match '(?ms)^  parity-linux:\s*$'
+        $parityContent | Should -Match '(?ms)^  parity-linux:\s*.*?name:\s*Parity \(Linux Container \${{\s*needs\.resolve-parity-context\.outputs\.lvcontainer_raw\s*}}\)'
+        $parityContent | Should -Match '(?ms)^  parity-linux:\s*.*?LVIE_CONTAINER_CONTRACT_TAG:\s*\${{\s*needs\.resolve-parity-context\.outputs\.lvcontainer_linux_tag\s*}}'
+        $parityContent | Should -Match '(?ms)^  parity-linux:\s*.*?LVIE_VI_ANALYZER_TASKS_PATH:\s*Tooling/vi-analyzer/tasks\.linux\.json'
+        $parityContent | Should -Match '(?ms)^  parity-linux:\s*.*?LVIE_VI_ANALYZER_SOURCE_SYNC_MANIFEST_PATH:\s*builds/status/source-sync-manifest-vi-analyzer-linux\.json'
+        $parityContent | Should -Match '(?ms)^  parity-linux:\s*.*?LVIE_VI_ANALYZER_LABVIEW_YEAR:\s*\${{\s*needs\.resolve-parity-context\.outputs\.lvcontainer_linux_year\s*}}'
+        $parityContent | Should -Match '(?ms)^  parity-linux:\s*.*?run-vi-analyzer-linux\.sh'
+        $parityContent | Should -Match '(?ms)^  parity-linux:\s*.*?LVIE_SOURCE_SYNC_MANIFEST_PATH="\$\{source_sync_manifest_container\}"'
+        $parityContent | Should -Match '(?ms)^  parity-linux:\s*.*?vi-analyzer-reports-parity'
+        $parityContent | Should -Match '(?ms)^  parity-linux:\s*.*?vi-analyzer-status-parity'
+        $parityContent | Should -Match '(?ms)^  parity-linux:\s*.*?vi-analyzer-source-sync-manifest-parity-linux'
+
+        $parityContent | Should -Match '(?ms)^  parity-windows:\s*$'
+        $parityContent | Should -Match '(?ms)^  parity-windows:\s*.*?name:\s*Parity \(Windows Container \${{\s*needs\.resolve-parity-context\.outputs\.lvcontainer_windows_tag\s*}}\)'
+        $parityContent | Should -Match '(?ms)^  parity-windows:\s*.*?LVIE_VI_ANALYZER_TASKS_PATH:\s*Tooling\\vi-analyzer\\tasks\.json'
+        $parityContent | Should -Match '(?ms)^  parity-windows:\s*.*?LVIE_VI_ANALYZER_SOURCE_SYNC_MANIFEST_PATH:\s*builds\\status\\source-sync-manifest-vi-analyzer-windows\.json'
+        $parityContent | Should -Match '(?ms)^  parity-windows:\s*.*?run-vi-analyzer-windows\.ps1'
+        $parityContent | Should -Match '(?ms)^  parity-windows:\s*.*?-SourceSyncManifestPath ''\${{\s*env\.LVIE_VI_ANALYZER_SOURCE_SYNC_MANIFEST_PATH\s*}}'''
+        $parityContent | Should -Match '(?ms)^  parity-windows:\s*.*?vi-analyzer-windows-logs-parity'
+        $parityContent | Should -Match '(?ms)^  parity-windows:\s*.*?vi-analyzer-reports-parity-windows'
+        $parityContent | Should -Match '(?ms)^  parity-windows:\s*.*?vi-analyzer-status-parity-windows'
+        $parityContent | Should -Match '(?ms)^  parity-windows:\s*.*?vi-analyzer-source-sync-manifest-parity-windows'
+        (Test-Path -LiteralPath $script:runViAnalyzerWindowsPath -PathType Leaf) | Should -BeTrue
+
+        $runViAnalyzerWindowsContent = Get-Content -Raw -Path $script:runViAnalyzerWindowsPath
+        $runViAnalyzerWindowsContent | Should -Match 'Synchronizing workspace Icon Editor sources into LabVIEW install before VI Analyzer\.'
+        $runViAnalyzerWindowsContent | Should -Match 'source-sync-manifest-vi-analyzer-windows\.json'
+        $runViAnalyzerWindowsContent | Should -Match 'source_sync_manifest_path'
+        $runViAnalyzerWindowsContent | Should -Match 'source_sync'
     }
 
     It 'enforces non-zero analyzed tests and file-level failure extraction in Run-ViAnalyzer' {
         (Test-Path -LiteralPath $script:runViAnalyzerPath -PathType Leaf) | Should -BeTrue
 
         $content = Get-Content -Raw -Path $script:runViAnalyzerPath
+        $content | Should -Match '\[int\]\$MaxAttempts\s*=\s*3'
+        $content | Should -Match '\[int\]\$RetryDelaySeconds\s*=\s*5'
+        $content | Should -Match 'function Test-ViAnalyzerTransientCliFailure'
+        $content | Should -Match 'You cannot initialize the logger multiple times'
+        $content | Should -Match 'failed to establish a connection with LabVIEW'
+        $content | Should -Match 'Call By Reference in RunExecuteOperationVI'
+        $content | Should -Match 'function Invoke-CloseLabVIEWSafely'
+        $content | Should -Match 'Retrying VI Analyzer task'
+        $content | Should -Match 'Transient LabVIEWCLI failure detected'
         $content | Should -Match 'Resolve-LabVIEWCliPortFromContract'
+        $content | Should -Match 'LVIE_REMEDIATE_LABVIEWCLI_PORT_CONTRACT'
+        $content | Should -Match '-EnableRemediation:\$portRemediationEnabled'
         $content | Should -Match 'RunVIAnalyzer'
+        $content | Should -Match 'attempts'
+        $content | Should -Match 'transient_failure_detected'
         $content | Should -Match 'analyzed_total'
         $content | Should -Match 'No tests were analyzed'
         $content | Should -Match 'Failed Tests'

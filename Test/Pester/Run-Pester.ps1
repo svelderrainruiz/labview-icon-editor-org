@@ -83,8 +83,22 @@ if ($PSBoundParameters.ContainsKey('RunDevModeTests')) {
     }
 }
 
+$pesterBootstrapPath = Join-Path $repoRoot 'Tooling\support\PesterBootstrap.ps1'
+if (-not (Test-Path -LiteralPath $pesterBootstrapPath -PathType Leaf)) {
+    throw "Pester bootstrap helper not found: $pesterBootstrapPath"
+}
+. $pesterBootstrapPath
+$pesterInfo = Import-RepoPester -RepoRoot $repoRoot -MinimumVersion ([version]'5.0.0') -AllowInstallFromGallery
+Write-Host ("Using Pester {0} from {1}" -f $pesterInfo.Version, $pesterInfo.ModuleBase)
+
 $configuration = New-PesterConfiguration
-$configuration.Run.Path = $PSScriptRoot
+$additionalContractTests = @(
+    (Join-Path $repoRoot 'Test\BuildVipLockContract.Tests.ps1'),
+    (Join-Path $repoRoot 'Test\VipbBuildLock.Tests.ps1'),
+    (Join-Path $repoRoot 'Test\VipmPortAlignment.Tests.ps1'),
+    (Join-Path $repoRoot 'Test\VipcRemediationSummaryContract.Tests.ps1')
+) | Where-Object { Test-Path -Path $_ }
+$configuration.Run.Path = @($PSScriptRoot) + $additionalContractTests
 $configuration.Run.PassThru = $true
 $configuration.Output.Verbosity = 'Detailed'
 
@@ -94,9 +108,23 @@ if ($CI) {
         New-Item -Path $resultsDir -ItemType Directory | Out-Null
     }
 
+    $pesterRunTokenParts = @()
+    if (-not [string]::IsNullOrWhiteSpace($RunId)) {
+        $sanitizedRunId = ($RunId -replace '[^A-Za-z0-9._-]', '-')
+        if (-not [string]::IsNullOrWhiteSpace($sanitizedRunId)) {
+            $pesterRunTokenParts += $sanitizedRunId
+        }
+    }
+    $pesterRunTokenTimestamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
+    $pesterRunTokenParts += $LabVIEWVersion
+    $pesterRunTokenParts += $LabVIEWBitness
+    $pesterRunTokenParts += $pesterRunTokenTimestamp
+    $pesterRunTokenParts += $PID
+    $pesterRunToken = ($pesterRunTokenParts -join '-')
+
     $configuration.TestResult.Enabled = $true
     $configuration.TestResult.OutputFormat = 'NUnitXml'
-    $configuration.TestResult.OutputPath = (Join-Path $resultsDir ("pester-devmode-$LabVIEWVersion-$LabVIEWBitness.xml"))
+    $configuration.TestResult.OutputPath = (Join-Path $resultsDir ("pester-devmode-{0}.xml" -f $pesterRunToken))
 }
 
 $exitCode = 0

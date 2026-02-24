@@ -266,6 +266,7 @@ if (-not (Test-Path -LiteralPath $ciWorkflowPath -PathType Leaf)) {
         'changes',
         'apply-deps-64',
         'apply-deps-32',
+        'vi-analyzer',
         'version',
         'unit-tests',
         'build-ppl-x86',

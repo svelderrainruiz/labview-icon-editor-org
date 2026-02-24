@@ -13,7 +13,10 @@ This repository includes a hosted parity workflow at `.github/workflows/labview-
 
 - Linux container image: `nationalinstruments/labview:<release>-linux`
 - Windows container image: `nationalinstruments/labview:<release>-windows`
-- VI Analyzer Linux container lane, resolved from `.lvcontainer` through parity context.
+- VI Analyzer container responsibilities are merged into parity container lanes:
+  - Linux: `Parity (Linux Container <.lvcontainer>)`
+  - Windows: `Parity (Windows Container <resolved windows tag>)`
+- Source sync before VI Analyzer: both container workers synchronize workspace Icon Editor sources (`resource/plugins` and `vi.lib/LabVIEW Icon API`) into the container LabVIEW install before running merged VI Analyzer tasks.
 - Always-on operation: `LabVIEWCLI MassCompile` on `Test/Templates`
 - Default exclusion: `Polymorphic Template.vi` is excluded from parity MassCompile via `CONTAINER_PARITY_EXCLUDE_FILES` because it is a known headless bad VI in container runs.
 
@@ -29,12 +32,12 @@ Build-spec parity is mandatory and is a blocking check.
 - Container lanes:
   - `Parity (Linux Container <.lvcontainer>)`
   - `Parity (Windows Container <resolved windows tag>)`
-  - `VI Analyzer Linux container <.lvcontainer>`
+  Linux and Windows parity container lanes own their corresponding merged VI Analyzer responsibilities.
   These lanes always run in every parity mode.
 
 - Self-hosted lanes:
-  - `Parity (Self-Hosted Windows LabVIEW 64-bit)`
-  - `Parity (Self-Hosted Windows LabVIEW 32-bit)`
+  - `Parity (Self-Hosted Windows LabVIEW 64-bit) (<major.minor from .lvversion>)`
+  - `Parity (Self-Hosted Windows LabVIEW 32-bit) (<major.minor from .lvversion>)`
   These lanes are controlled by parity mode, compatibility toggles, and capacity detection.
 
 - Mode defaults:
@@ -98,6 +101,11 @@ VI Analyzer artifacts from parity:
 - `vi-analyzer-linux-logs-parity`
 - `vi-analyzer-reports-parity`
 - `vi-analyzer-status-parity`
+- `vi-analyzer-source-sync-manifest-parity-linux`
+- `vi-analyzer-windows-logs-parity`
+- `vi-analyzer-reports-parity-windows`
+- `vi-analyzer-status-parity-windows`
+- `vi-analyzer-source-sync-manifest-parity-windows`
 
 Workflow summary:
 - `Parity Summary` writes mode, self-hosted capacity, effective lane toggles, and lane results to the job summary.
@@ -119,7 +127,7 @@ PR run:
 
 - Triggered automatically when parity workflow/script files, `.lvversion`, `lv_icon_editor.lvproj`, or `Test/Templates` change.
 - PR runs default to `parity_mode=auto`:
-  - container lanes (including VI Analyzer) always run
+  - container lanes always run (both container lanes include merged VI Analyzer responsibilities)
   - self-hosted lanes run only if a matching runner is online
 
 ## Local Deterministic Preflight
@@ -139,7 +147,7 @@ pwsh -NoProfile -File .\Tooling\Invoke-LinuxContainerPreflight.ps1 -RepoRoot . -
 Behavior contract:
 - Resolves `.lvcontainer` via `Get-LabVIEWContainerReleaseInfo`.
 - Uses resolved `ReleaseTag` for `runner-cli parity context --lv-release <releaseTag>`.
-- Uses resolved `LinuxImage` for Docker image inspect/pull and VI Analyzer worker.
+- Uses resolved `LinuxImage` for Docker image inspect/pull and Linux parity execution, including merged VI Analyzer responsibilities.
 - Fails fast when `.lvcontainer` resolves to a non-linux tag.
 
 Outputs:

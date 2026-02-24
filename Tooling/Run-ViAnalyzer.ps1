@@ -5,8 +5,8 @@
 
 .DESCRIPTION
     Executes each VI Analyzer task listed in Tooling/vi-analyzer/tasks.json
-    using LabVIEWCLI RunVIAnalyzer with strict LabVIEWCLI port-contract
-    resolution.
+    using LabVIEWCLI RunVIAnalyzer with LabVIEWCLI port-contract
+    resolution (strict by default, with optional remediation).
 #>
 
 [CmdletBinding()]
@@ -30,7 +30,15 @@ param(
     [string]$ReportsRoot = 'builds/vi-analyzer',
 
     [Parameter(Mandatory = $false)]
-    [string]$StatusPath = 'builds/status/vi-analyzer-summary.json'
+    [string]$StatusPath = 'builds/status/vi-analyzer-summary.json',
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(1, 5)]
+    [int]$MaxAttempts = 3,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(0, 120)]
+    [int]$RetryDelaySeconds = 5
 )
 
 $ErrorActionPreference = 'Stop'
@@ -76,6 +84,21 @@ function Initialize-Directory {
     if (-not (Test-Path -Path $Path -PathType Container)) {
         New-Item -Path $Path -ItemType Directory -Force | Out-Null
     }
+}
+
+function Test-EnabledValue {
+    param(
+        [AllowNull()]
+        [string]$Value
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return $false
+    }
+
+    return $Value.Equals('1', [System.StringComparison]::OrdinalIgnoreCase) `
+        -or $Value.Equals('true', [System.StringComparison]::OrdinalIgnoreCase) `
+        -or $Value.Equals('yes', [System.StringComparison]::OrdinalIgnoreCase)
 }
 
 function Get-CountFromText {
@@ -333,6 +356,67 @@ function Add-ViAnalyzerSummary {
     Add-Content -Path $SummaryPath -Value ($lines -join [Environment]::NewLine)
 }
 
+function Test-ViAnalyzerTransientCliFailure {
+    param(
+        [int]$ExitCode,
+        [string[]]$OutputLines
+    )
+
+    if ($ExitCode -eq 0) {
+        return $false
+    }
+
+    $text = if ($OutputLines -and $OutputLines.Count -gt 0) {
+        $OutputLines -join [Environment]::NewLine
+    } else {
+        ''
+    }
+
+    if ([string]::IsNullOrWhiteSpace($text)) {
+        return $false
+    }
+
+    $transientPatterns = @(
+        'Error code\s*:\s*-350052',
+        'You cannot initialize the logger multiple times',
+        'Error code\s*:\s*-350000',
+        'failed to establish a connection with LabVIEW',
+        'Call By Reference in RunExecuteOperationVI'
+    )
+
+    foreach ($pattern in $transientPatterns) {
+        if ($text -match $pattern) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
+function Invoke-CloseLabVIEWSafely {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot,
+        [Parameter(Mandatory = $true)]
+        [string]$LabVIEWVersion,
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('32', '64')]
+        [string]$Bitness
+    )
+
+    $closeScript = Join-Path -Path $RepoRoot -ChildPath '.github\actions\close-labview\Close_LabVIEW.ps1'
+    if (-not (Test-Path -Path $closeScript -PathType Leaf)) {
+        Write-Warning ("Close_LabVIEW.ps1 not found at {0}. Continuing without close attempt." -f $closeScript)
+        return
+    }
+
+    try {
+        & $closeScript -LabVIEWVersion $LabVIEWVersion -SupportedBitness $Bitness | Out-Null
+    } catch {
+        Write-Warning ("Close_LabVIEW.ps1 failed: {0}" -f $_.Exception.Message)
+    }
+}
+
 $resolvedRepoRoot = Resolve-RepoRootPath -PathOverride $RepoRoot
 $tasksPathResolved = Resolve-PathFromRoot -Root $resolvedRepoRoot -Path $TasksPath
 $reportsRootResolved = Resolve-PathFromRoot -Root $resolvedRepoRoot -Path $ReportsRoot
@@ -372,11 +456,17 @@ if ([string]::IsNullOrWhiteSpace($resolvedLabVIEWYear)) {
 }
 
 $labviewExecutablePath = Resolve-LabVIEWExecutablePath -VersionYear $resolvedLabVIEWYear -Bitness $SupportedBitness
+$portRemediationEnabled = Test-EnabledValue -Value $env:LVIE_REMEDIATE_LABVIEWCLI_PORT_CONTRACT
+if ($portRemediationEnabled) {
+    Write-Warning 'LabVIEWCLI port contract remediation is enabled via LVIE_REMEDIATE_LABVIEWCLI_PORT_CONTRACT.'
+}
+
 $portResolution = Resolve-LabVIEWCliPortFromContract `
     -RepoRoot $resolvedRepoRoot `
     -LabVIEWVersion $resolvedLabVIEWVersionRaw `
     -Bitness $SupportedBitness `
-    -LabVIEWExecutablePath $labviewExecutablePath
+    -LabVIEWExecutablePath $labviewExecutablePath `
+    -EnableRemediation:$portRemediationEnabled
 
 $labviewCliCommand = Get-Command LabVIEWCLI -ErrorAction SilentlyContinue
 if (-not $labviewCliCommand) {
@@ -386,6 +476,11 @@ if (-not $labviewCliCommand) {
 Write-Host ("Resolved LabVIEW: raw={0}, year={1}, bitness={2}" -f $resolvedLabVIEWVersionRaw, $resolvedLabVIEWYear, $SupportedBitness)
 Write-Host ("LabVIEW executable: {0}" -f $labviewExecutablePath)
 Write-Host ("Using LabVIEWCLI port {0} (source: {1})" -f $portResolution.PortNumber, $portResolution.Source)
+if ($portResolution.RemediationEnabled -and $portResolution.RemediationApplied) {
+    Write-Warning ("LabVIEWCLI port contract remediation modified LabVIEW.ini at {0}" -f $portResolution.IniPath)
+} elseif ($portResolution.RemediationEnabled) {
+    Write-Host "LabVIEWCLI port contract remediation was enabled, but no ini updates were required."
+}
 Write-Host ("Running VI Analyzer tasks from: {0}" -f $tasksPathResolved)
 
 $taskResults = New-Object 'System.Collections.Generic.List[object]'
@@ -414,29 +509,55 @@ foreach ($task in $tasks) {
 
     Write-Host ""
     Write-Host ("=== VI Analyzer task: {0} ===" -f $taskId)
-    $start = Get-Date
-    $cliArgs = @(
-        '-OperationName', 'RunVIAnalyzer',
-        '-LabVIEWPath', $labviewExecutablePath,
-        '-PortNumber', $portResolution.PortNumber.ToString(),
-        '-ConfigPath', $configPathResolved,
-        '-ReportPath', $reportPath,
-        '-ReportSaveType', 'ASCII',
-        '-LogToConsole', 'TRUE',
-        '-Headless'
-    )
-
-    $rawOutput = & $labviewCliCommand.Source @cliArgs 2>&1
-    $exitCode = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+    $attemptCount = 0
     $outputLines = @()
-    foreach ($entry in @($rawOutput)) {
-        if ($null -ne $entry) {
-            $line = [string]$entry
-            $outputLines += $line
-            Write-Host $line
+    $exitCode = 0
+    $durationMs = 0
+    $transientFailureDetected = $false
+    $completed = $false
+    while (-not $completed) {
+        $attemptCount += 1
+        if ($attemptCount -gt 1) {
+            Write-Warning ("Retrying VI Analyzer task '{0}' (attempt {1}/{2}) after transient failure." -f $taskId, $attemptCount, $MaxAttempts)
+            Invoke-CloseLabVIEWSafely -RepoRoot $resolvedRepoRoot -LabVIEWVersion $resolvedLabVIEWYear -Bitness $SupportedBitness
+            if ($RetryDelaySeconds -gt 0) {
+                Start-Sleep -Seconds $RetryDelaySeconds
+            }
+        }
+
+        $start = Get-Date
+        $cliArgs = @(
+            '-OperationName', 'RunVIAnalyzer',
+            '-LabVIEWPath', $labviewExecutablePath,
+            '-PortNumber', $portResolution.PortNumber.ToString(),
+            '-ConfigPath', $configPathResolved,
+            '-ReportPath', $reportPath,
+            '-ReportSaveType', 'ASCII',
+            '-LogToConsole', 'TRUE',
+            '-Headless'
+        )
+
+        $rawOutput = & $labviewCliCommand.Source @cliArgs 2>&1
+        $exitCode = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+        $outputLines = @()
+        foreach ($entry in @($rawOutput)) {
+            if ($null -ne $entry) {
+                $line = [string]$entry
+                $outputLines += $line
+                Write-Host $line
+            }
+        }
+        $durationMs = [int][Math]::Round(((Get-Date) - $start).TotalMilliseconds)
+
+        $transientFailureDetected = Test-ViAnalyzerTransientCliFailure -ExitCode $exitCode -OutputLines $outputLines
+        if ($exitCode -eq 0) {
+            $completed = $true
+        } elseif ($transientFailureDetected -and $attemptCount -lt $MaxAttempts) {
+            Write-Warning ("Transient LabVIEWCLI failure detected for task '{0}' (exit {1}); retrying." -f $taskId, $exitCode)
+        } else {
+            $completed = $true
         }
     }
-    $durationMs = [int][Math]::Round(((Get-Date) - $start).TotalMilliseconds)
 
     $cliCounts = Get-LabVIEWCliSummaryCount -Lines $outputLines
     $reportText = Get-ViAnalyzerReportText -ReportPath $reportPath
@@ -497,9 +618,11 @@ foreach ($task in $tasks) {
             config_path     = $configPathResolved
             report_path     = $reportPath
             exit_code       = $exitCode
+            attempts        = $attemptCount
             duration_ms     = $durationMs
             succeeded       = $taskSucceeded
             counts          = [pscustomobject]$counts
+            transient_failure_detected = $transientFailureDetected
             failure_reasons = @($failureReasons)
             failure_items   = @($failureItems)
             failure_file_paths = @($failureFilePaths)
@@ -525,6 +648,8 @@ $status = [ordered]@{
         source        = [string]$portResolution.Source
         contract_path = [string]$portResolution.ContractPath
         ini_path      = [string]$portResolution.IniPath
+        remediation_enabled = [bool]$portResolution.RemediationEnabled
+        remediation_applied = [bool]$portResolution.RemediationApplied
     }
     task_results     = $taskResults
 }

@@ -637,6 +637,7 @@ jobs:
     name: PowerShell Lint
     needs: run-metadata
     runs-on: ubuntu-latest
+    continue-on-error: false
     steps:
       - uses: actions/checkout@v4
         with:
@@ -690,6 +691,10 @@ jobs:
         shell: pwsh
         run: |
           pwsh -NoProfile -File "$env:GITHUB_WORKSPACE/Tooling/Test-ViAnalyzerContainerContract.ps1" -WriteSummary
+      - name: Validate solution contract
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE/Tooling/Test-SolutionContract.ps1" -WriteSummary
       - name: Validate solo-maintainer workflow contract
         shell: pwsh
         run: |
@@ -702,7 +707,7 @@ jobs:
       - name: Run PSScriptAnalyzer
         shell: pwsh
         run: |
-          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE/Tooling/Invoke-PSScriptAnalyzer.ps1" -WriteSummary
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE/Tooling/Invoke-PSScriptAnalyzer.ps1" -FailOnIssues $true -WriteSummary
 
   vip-prerelease-requirements-lint:
     name: VIP Prerelease Requirements Lint
@@ -847,7 +852,11 @@ jobs:
             '--vipc-path', '.github/actions/apply-vipc/runner_dependencies.vipc',
             '--output-path', "$env:REPO_ROOT\\builds\\status\\vipc-audit-64.json"
           )
-          & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs
+          $runnerCliPath = $env:LVIE_RUNNER_CLI_PATH
+          if ([string]::IsNullOrWhiteSpace($runnerCliPath) -or -not (Test-Path -Path $runnerCliPath -PathType Leaf)) {
+            throw "runner-cli executable not found at '$runnerCliPath'."
+          }
+          & $runnerCliPath @runnerCliArgs
       - name: Report VIPC change status (LV x64)
         shell: pwsh
         run: |
@@ -880,7 +889,11 @@ jobs:
             '--supported-bitness', '64',
             '--vipc-path', '.github/actions/apply-vipc/runner_dependencies.vipc'
           )
-          $output = & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs *>&1
+          $runnerCliPath = $env:LVIE_RUNNER_CLI_PATH
+          if ([string]::IsNullOrWhiteSpace($runnerCliPath) -or -not (Test-Path -Path $runnerCliPath -PathType Leaf)) {
+            throw "runner-cli executable not found at '$runnerCliPath'."
+          }
+          $output = & $runnerCliPath @runnerCliArgs *>&1
           $exitCode = $LASTEXITCODE
 
           if ($output) {
@@ -948,7 +961,11 @@ jobs:
             '--vipc-path', '.github/actions/apply-vipc/runner_dependencies.vipc',
             '--output-path', "$env:REPO_ROOT\\builds\\status\\vipc-audit-32.json"
           )
-          & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs
+          $runnerCliPath = $env:LVIE_RUNNER_CLI_PATH
+          if ([string]::IsNullOrWhiteSpace($runnerCliPath) -or -not (Test-Path -Path $runnerCliPath -PathType Leaf)) {
+            throw "runner-cli executable not found at '$runnerCliPath'."
+          }
+          & $runnerCliPath @runnerCliArgs
       - name: Report VIPC change status (LV x86)
         shell: pwsh
         run: |
@@ -981,7 +998,11 @@ jobs:
             '--supported-bitness', '32',
             '--vipc-path', '.github/actions/apply-vipc/runner_dependencies.vipc'
           )
-          $output = & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs *>&1
+          $runnerCliPath = $env:LVIE_RUNNER_CLI_PATH
+          if ([string]::IsNullOrWhiteSpace($runnerCliPath) -or -not (Test-Path -Path $runnerCliPath -PathType Leaf)) {
+            throw "runner-cli executable not found at '$runnerCliPath'."
+          }
+          $output = & $runnerCliPath @runnerCliArgs *>&1
           $exitCode = $LASTEXITCODE
 
           if ($output) {
@@ -1009,6 +1030,79 @@ jobs:
           path: ${{ env.REPO_ROOT }}/builds/status/vipc-apply-32.log
           if-no-files-found: warn
       - name: Job teardown (LV x86)
+        if: always()
+        uses: ./.github/actions/lvie-job-teardown
+
+  vi-analyzer:
+    name: VI Analyzer Gate (LV ${{ needs.version-gate.outputs.raw }} ${{ matrix.bitness_label }})
+    needs: [run-metadata, prerelease-context, version-gate, apply-deps-64, apply-deps-32]
+    runs-on: ${{ matrix.runner_label }}
+    env:
+      LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
+      LVIE_REQUIRED_LABVIEW_VERSION: ${{ needs.version-gate.outputs.raw }}
+      LVIE_REQUIRED_LABVIEW_VERSION_YEAR: ${{ needs.version-gate.outputs.year }}
+      LVIE_REQUIRED_LABVIEW_MINOR_REVISION: ${{ needs.version-gate.outputs.minor }}
+      LVIE_REMEDIATE_LABVIEWCLI_PORT_CONTRACT: ${{ vars.LVIE_REMEDIATE_LABVIEWCLI_PORT_CONTRACT || '1' }}
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - bitness: '64'
+            bitness_label: x64
+            runner_label: ${{ vars.LVIE_RUNNER_LABEL_64 || format('self-hosted-windows-lv{0}x64', needs.version-gate.outputs.year) }}
+          - bitness: '32'
+            bitness_label: x86
+            runner_label: ${{ vars.LVIE_RUNNER_LABEL_32 || format('self-hosted-windows-lv{0}x86', needs.version-gate.outputs.year) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Job setup
+        uses: ./.github/actions/lvie-job-setup
+        with:
+          checkout: 'false'
+          bitness: ${{ matrix.bitness }}
+          create_worktree: 'true'
+          worktree_root_mode: runner_temp
+
+      - name: Run VI Analyzer (LV ${{ matrix.bitness }}-bit)
+        shell: pwsh
+        working-directory: ${{ env.REPO_ROOT }}
+        run: |
+          $reportsRoot = "builds/vi-analyzer/$env:RUNNER_OS-${{ matrix.bitness }}"
+          $statusPath = "builds/status/vi-analyzer-summary-$env:RUNNER_OS-${{ matrix.bitness }}.json"
+          $runnerCliProject = Join-Path $env:REPO_ROOT 'Tooling/runner-cli/RunnerCli/RunnerCli.csproj'
+          if (-not (Test-Path -Path $runnerCliProject -PathType Leaf)) {
+            throw "runner-cli project not found at $runnerCliProject"
+          }
+
+          & pwsh -NoProfile -File "$env:REPO_ROOT/Tooling/Run-ViAnalyzer.ps1" `
+            -RepoRoot $env:REPO_ROOT `
+            -LabVIEWVersion $env:LVIE_REQUIRED_LABVIEW_VERSION `
+            -SupportedBitness '${{ matrix.bitness }}' `
+            -ReportsRoot $reportsRoot `
+            -StatusPath $statusPath
+
+      - name: Upload VI Analyzer reports (LV ${{ matrix.bitness }}-bit)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: vi-analyzer-reports-${{ runner.os }}-${{ matrix.bitness }}-bit
+          path: ${{ env.REPO_ROOT }}/builds/vi-analyzer/${{ runner.os }}-${{ matrix.bitness }}
+          if-no-files-found: warn
+
+      - name: Upload VI Analyzer status (LV ${{ matrix.bitness }}-bit)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: vi-analyzer-status-${{ runner.os }}-${{ matrix.bitness }}-bit
+          path: ${{ env.REPO_ROOT }}/builds/status/vi-analyzer-summary-${{ runner.os }}-${{ matrix.bitness }}.json
+          if-no-files-found: warn
+
+      - name: Job teardown
         if: always()
         uses: ./.github/actions/lvie-job-teardown
 
@@ -1063,7 +1157,7 @@ jobs:
   unit-tests:
     name: Test Source Using LV ${{ matrix.bitness }}-bit
     if: ${{ needs.prerelease-context.outputs.ci_profile != 'release-priority' }}
-    needs: [run-metadata, prerelease-context, version-gate, apply-deps-64, apply-deps-32]
+    needs: [run-metadata, prerelease-context, version-gate, apply-deps-64, apply-deps-32, vi-analyzer]
     runs-on: ${{ matrix.runner_label }}
     env:
       LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
@@ -1112,7 +1206,11 @@ jobs:
             '--vipc-path', '.github/actions/apply-vipc/runner_dependencies.vipc',
             '--output-path', $precheckOutputPath
           )
-          & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs
+          $runnerCliPath = $env:LVIE_RUNNER_CLI_PATH
+          if ([string]::IsNullOrWhiteSpace($runnerCliPath) -or -not (Test-Path -Path $runnerCliPath -PathType Leaf)) {
+            throw "runner-cli executable not found at '$runnerCliPath'."
+          }
+          & $runnerCliPath @runnerCliArgs
       - name: Test Source Using LV ${{ matrix.bitness }}-bit
         id: source_test
         shell: pwsh
@@ -1359,7 +1457,11 @@ jobs:
             $runnerCliArgs += '--verbose-gcli'
           }
           $lunitStartUtc = (Get-Date).ToUniversalTime()
-          $output = & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs *>&1
+          $runnerCliPath = $env:LVIE_RUNNER_CLI_PATH
+          if ([string]::IsNullOrWhiteSpace($runnerCliPath) -or -not (Test-Path -Path $runnerCliPath -PathType Leaf)) {
+            throw "runner-cli executable not found at '$runnerCliPath'."
+          }
+          $output = & $runnerCliPath @runnerCliArgs *>&1
           $runnerCliExitCode = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
           $buildServerShutdownAfterExitCode = Invoke-DotnetBuildServerShutdown -Phase 'post-lunit'
           if ($output) {
@@ -1674,7 +1776,11 @@ jobs:
             '--build', '${{ needs.version.outputs.BUILD }}',
             '--commit', '${{ github.sha }}'
           )
-          & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs
+          $runnerCliPath = $env:LVIE_RUNNER_CLI_PATH
+          if ([string]::IsNullOrWhiteSpace($runnerCliPath) -or -not (Test-Path -Path $runnerCliPath -PathType Leaf)) {
+            throw "runner-cli executable not found at '$runnerCliPath'."
+          }
+          & $runnerCliPath @runnerCliArgs
           $runnerCliExitCode = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
           Write-Host ("runner-cli ppl build exit code: {0}" -f $runnerCliExitCode)
           exit $runnerCliExitCode
@@ -1787,7 +1893,11 @@ jobs:
             '--build', '${{ needs.version.outputs.BUILD }}',
             '--commit', '${{ github.sha }}'
           )
-          & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs
+          $runnerCliPath = $env:LVIE_RUNNER_CLI_PATH
+          if ([string]::IsNullOrWhiteSpace($runnerCliPath) -or -not (Test-Path -Path $runnerCliPath -PathType Leaf)) {
+            throw "runner-cli executable not found at '$runnerCliPath'."
+          }
+          & $runnerCliPath @runnerCliArgs
           $runnerCliExitCode = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
           Write-Host ("runner-cli ppl build exit code: {0}" -f $runnerCliExitCode)
           exit $runnerCliExitCode
@@ -2046,7 +2156,7 @@ jobs:
           if ($usePrebuiltRunnerCli) {
             & $runnerCliPath @runnerCliArgs
           } else {
-            & dotnet run --project $runnerCliProject --configuration Release -- @runnerCliArgs
+            throw "runner-cli unavailable: expected prebuilt executable via LVIE_RUNNER_CLI_PATH for self-hosted lane."
           }
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
@@ -2586,6 +2696,7 @@ jobs:
       - changes
       - apply-deps-64
       - apply-deps-32
+      - vi-analyzer
       - unit-tests
       - build-ppl-x64
       - build-ppl-x86
@@ -2637,6 +2748,7 @@ jobs:
             'changes',
             'apply-deps-64',
             'apply-deps-32',
+            'vi-analyzer',
             'unit-tests',
             'build-ppl-x64',
             'build-ppl-x86',
@@ -2645,7 +2757,7 @@ jobs:
           $requiredByProfile = @{
             'full' = @($requiredCommon + $requiredFullValidation)
             'pr-fast' = @($requiredCommon + $requiredFullValidation)
-            'release-priority' = @($requiredCommon)
+            'release-priority' = @($requiredCommon + @('vi-analyzer'))
           }
           if (-not $requiredByProfile.ContainsKey($ciProfile)) {
             Write-Warning ("Unknown ci_profile '{0}'; defaulting to full prepublish contract." -f $ciProfile)
@@ -3049,6 +3161,7 @@ jobs:
       - changes
       - apply-deps-64
       - apply-deps-32
+      - vi-analyzer
       - unit-tests
       - build-ppl-x64
       - build-ppl-x86
@@ -3096,6 +3209,7 @@ jobs:
             'changes',
             'apply-deps-64',
             'apply-deps-32',
+            'vi-analyzer',
             'unit-tests',
             'build-ppl-x64',
             'build-ppl-x86',
@@ -3104,7 +3218,7 @@ jobs:
           $requiredByProfile = @{
             'full' = @($requiredCommon + $requiredFullValidation)
             'pr-fast' = @($requiredCommon + $requiredFullValidation)
-            'release-priority' = @($requiredCommon)
+            'release-priority' = @($requiredCommon + @('vi-analyzer'))
           }
 
           $ciProfile = '${{ needs.prerelease-context.outputs.ci_profile }}'
@@ -3225,3 +3339,4 @@ jobs:
           }
 
           Write-Host 'CI required context passed.'
+

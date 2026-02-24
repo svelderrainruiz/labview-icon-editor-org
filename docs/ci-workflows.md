@@ -1,6 +1,6 @@
 # Local CI/CD Workflows
 
-**Last updated:** 2026-02-19
+**Last updated:** 2026-02-20
 
 Quick link: `.github/workflows/runner-cli.yml` (Runner CLI consolidated workflow).
 
@@ -95,7 +95,7 @@ This document is the canonical source for release/publication policy.
 - Auto relay workflow: [`.github/workflows/prerelease-auto-dispatch.yml`](../.github/workflows/prerelease-auto-dispatch.yml) listens for successful `CI Pipeline` `push` runs on `develop`, re-validates merge-commit + merged-PR eligibility, then dispatches strict SHA-pinned publish intent through `ci.yml` with `release-priority`.
 - Manual fallback: `workflow_dispatch` remains available for deterministic backfill when auto relay is not sufficient.
 - Execution profiles (`prerelease-context` output `ci_profile`):
-  - `release-priority`: `workflow_dispatch` with `force_gcli_lunit=true`; skips most self-hosted heavy jobs (`Verify IE Paths`, smoke, unit-tests, `build-ppl-x64`, `build-ppl-x86`, `build-vip`) and targets <= 25 minutes.
+  - `release-priority`: `workflow_dispatch` with `force_gcli_lunit=true`; skips selected self-hosted heavy jobs (smoke, unit-tests, `build-ppl-x64`, `build-ppl-x86`, `build-vip`) while keeping `vi-analyzer` as a required blocking gate, and targets <= 25 minutes.
   - `pr-fast`: `pull_request`; keeps validation coverage but uses 64-bit-only matrices for smoke/unit-tests, targeting <= 35 minutes.
   - `full`: default for `push` and `workflow_dispatch` without `force_gcli_lunit=true`; preserves full publish-eligible flow.
 - Profile routing note: `force_gcli_lunit=true` is now used only to select the `release-priority` profile; unit-test execution is standardized on direct `g-cli lunit` in workflows that run tests.
@@ -195,10 +195,11 @@ Below are the **key GitHub Actions** provided in this repository:
 The [`ci.yml`](../.github/workflows/ci.yml) pipeline breaks the build into several jobs:
 
 - **pylavi-validate** – report-only LabVIEW file validation using `vi_validate` (strict + legacy profiles) with `.lvversion`-synced version gating and optional baseline/delta reporting.
-- **VI Analyzer ownership note** – the blocking Linux container VI Analyzer lane now lives in [`labview-parity.yml`](../.github/workflows/labview-parity.yml) (`vi-analyzer-linux`) and uploads `vi-analyzer-reports-parity` plus `vi-analyzer-status-parity` (`builds/status/vi-analyzer-summary.parity.json`).
+- **VI Analyzer ownership note** – container VI Analyzer responsibilities remain merged into parity container lanes in [`labview-parity.yml`](../.github/workflows/labview-parity.yml): `Parity (Linux Container <.lvcontainer>)` (artifacts `vi-analyzer-reports-parity`, `vi-analyzer-status-parity`, `vi-analyzer-source-sync-manifest-parity-linux`) and `Parity (Windows Container <resolved windows tag>)` (artifacts `vi-analyzer-reports-parity-windows`, `vi-analyzer-status-parity-windows`, `vi-analyzer-source-sync-manifest-parity-windows`).
 - **prerelease-context** – computes prerelease publish eligibility, reason, merged-PR bump override context, and the execution profile (`ci_profile`: `release-priority`, `pr-fast`, `full`).
 - **changes** – checks out the repository and detects `.vipc` file changes for diagnostics/reporting in downstream jobs.
 - **apply-deps-64 / apply-deps-32** – run VIPC audit (`Assert-VipcApplied`) per bitness lane on bitness-addressable runner labels (`LVIE_RUNNER_LABEL_64` / `LVIE_RUNNER_LABEL_32`, with fallback to `LVIE_RUNNER_LABEL`), then optionally run informational VIPC apply diagnostics when manually dispatched with `vipc_apply_info=true`.
+- **vi-analyzer** – runs `Tooling/Run-ViAnalyzer.ps1` on self-hosted 64-bit and 32-bit lanes after VIPC application for all profiles (`full`, `pr-fast`, `release-priority`); lane names follow `VI Analyzer Gate (LV <.lvversion> <x64|x86>)` and each lane publishes `vi-analyzer-reports-*` and `vi-analyzer-status-*` artifacts.
 - **version** – computes the semantic version and build number using commit count and PR labels.
 - **unit-tests** – runs LabVIEW unit tests on Windows for the `.lvversion` target (currently `20.0` in this repository) after dependency application. Canonical execution is `runner-cli lunit run` (g-cli backend); parse/summary validation is parse-only via `runner-cli lunit validate` (`RunUnitTests.ps1 -SkipGcli`). Runs both 64-bit and 32-bit in `full` and `pr-fast`, and is skipped in `release-priority`.
   - Runtime compatibility mapping is execution-year only: source `.lvversion` year `2020` executes tests on year `2026`, while `.lvversion` remains the source contract.
