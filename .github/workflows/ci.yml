@@ -2093,7 +2093,8 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $vipDir = Join-Path -Path $env:REPO_ROOT -ChildPath "builds/VI Package"
+          $vipRoot = if (-not [string]::IsNullOrWhiteSpace($env:LVIE_ARTIFACT_ROOT)) { $env:LVIE_ARTIFACT_ROOT } else { $env:REPO_ROOT }
+          $vipDir = Join-Path -Path $vipRoot -ChildPath "builds/VI Package"
           if (-not (Test-Path $vipDir)) {
             Write-Error "VI Package directory not found at '$vipDir'."
             exit 1
