@@ -1,8 +1,72 @@
-#Requires -Version 7.0
 <#
 .SYNOPSIS
     Helper for invoking g-cli while capturing stdout and stderr separately.
 #>
+
+function ConvertTo-NativeProcessArgumentString {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+        [string[]]$Arguments
+    )
+
+    if ($Arguments.Count -eq 0) {
+        return ''
+    }
+
+    $formatted = foreach ($argument in $Arguments) {
+        if ($null -eq $argument) {
+            '""'
+            continue
+        }
+
+        $value = [string]$argument
+        if ($value.Length -eq 0) {
+            '""'
+            continue
+        }
+
+        if ($value -notmatch '[\s"]') {
+            $value
+            continue
+        }
+
+        # Match CreateProcess argument parsing rules for quoted values.
+        $builder = [System.Text.StringBuilder]::new()
+        $null = $builder.Append('"')
+        $backslashCount = 0
+
+        foreach ($character in $value.ToCharArray()) {
+            if ($character -eq '\') {
+                $backslashCount++
+                continue
+            }
+
+            if ($character -eq '"') {
+                $null = $builder.Append('\', ($backslashCount * 2) + 1)
+                $null = $builder.Append('"')
+                $backslashCount = 0
+                continue
+            }
+
+            if ($backslashCount -gt 0) {
+                $null = $builder.Append('\', $backslashCount)
+                $backslashCount = 0
+            }
+
+            $null = $builder.Append($character)
+        }
+
+        if ($backslashCount -gt 0) {
+            $null = $builder.Append('\', $backslashCount * 2)
+        }
+
+        $null = $builder.Append('"')
+        $builder.ToString()
+    }
+
+    return ($formatted -join ' ')
+}
 
 function Invoke-GCliCommand {
     param(
@@ -25,8 +89,13 @@ function Invoke-GCliCommand {
     $startInfo.UseShellExecute = $false
     $startInfo.CreateNoWindow = $true
 
-    foreach ($arg in $Arguments) {
-        $null = $startInfo.ArgumentList.Add($arg)
+    $hasArgumentList = $startInfo.PSObject.Properties.Match('ArgumentList').Count -gt 0
+    if ($hasArgumentList) {
+        foreach ($arg in $Arguments) {
+            $null = $startInfo.ArgumentList.Add($arg)
+        }
+    } else {
+        $startInfo.Arguments = ConvertTo-NativeProcessArgumentString -Arguments $Arguments
     }
 
     $process = [System.Diagnostics.Process]::new()
@@ -41,7 +110,12 @@ function Invoke-GCliCommand {
         if (-not $process.WaitForExit($TimeoutMs)) {
             $timedOut = $true
             try {
-                $process.Kill($true)
+                $killWithChildren = $process.GetType().GetMethod('Kill', [Type[]]@([bool]))
+                if ($null -ne $killWithChildren) {
+                    $process.Kill($true)
+                } else {
+                    $process.Kill()
+                }
             } catch {
                 Write-Verbose ("Failed to terminate g-cli process after timeout. {0}" -f $_.Exception.Message)
             }
