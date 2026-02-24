@@ -219,11 +219,14 @@ public static class ParityService
         }
 
         Console.WriteLine("Windows container parity script runs under powershell.exe (Windows PowerShell 5.1) inside the NI container.");
+        var powerShellExecutable = PowerShellHostResolver.ResolveExecutable();
         RunProcess(
-            "pwsh",
+            powerShellExecutable,
             new[]
             {
                 "-NoProfile",
+                "-ExecutionPolicy",
+                "RemoteSigned",
                 "-File",
                 Path.Combine(context.RepoRoot, "Tooling", "Test-PathContract.ps1"),
                 "-WriteSummary"
@@ -321,6 +324,8 @@ public static class ParityService
         var args = new List<string>
         {
             "-NoProfile",
+            "-ExecutionPolicy",
+            "RemoteSigned",
             "-File",
             scriptPath,
             "-WorkspaceRoot",
@@ -345,9 +350,10 @@ public static class ParityService
         parityEnvironment["CONTAINER_PARITY_LABVIEW_VERSION"] = executionYear;
         parityEnvironment["CONTAINER_PARITY_SOURCE_LABVIEW_VERSION"] = context.LabVIEWYear;
         parityEnvironment["CONTAINER_PARITY_LABVIEW_BITNESS"] = bitness;
+        var powerShellExecutable = PowerShellHostResolver.ResolveExecutable();
 
         RunProcess(
-            "pwsh",
+            powerShellExecutable,
             args,
             context.RepoRoot,
             parityEnvironment);
@@ -419,9 +425,10 @@ public static class ParityService
         }
 
         var command = $". '{EscapePwshSingleQuoted(scriptPath)}'; Resolve-LabVIEWExecutablePath -VersionYear '{EscapePwshSingleQuoted(versionYear)}' -Bitness '{EscapePwshSingleQuoted(bitness)}'";
+        var powerShellExecutable = PowerShellHostResolver.ResolveExecutable();
         var result = RunProcess(
-            "pwsh",
-            new[] { "-NoProfile", "-Command", command },
+            powerShellExecutable,
+            new[] { "-NoProfile", "-ExecutionPolicy", "RemoteSigned", "-Command", command },
             context.RepoRoot,
             throwOnError: true);
 

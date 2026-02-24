@@ -1,4 +1,3 @@
-#Requires -Version 7.0
 <#
 .SYNOPSIS
     Ensures runner-cli is available and exports LVIE_RUNNER_CLI_PATH.
@@ -258,12 +257,18 @@ function Resolve-RunnerCliPath {
         $candidates += $env:LVIE_RUNNER_CLI_PATH
     }
     if (-not [string]::IsNullOrWhiteSpace($RepoRootResolved)) {
-        $candidates += (Join-Path $RepoRootResolved 'Tooling\runner-cli\publish' $Runtime $CliFile)
-        $candidates += (Join-Path $RepoRootResolved 'Tooling\runner-cli\RunnerCli\bin\Release\net8.0' $Runtime 'publish' $CliFile)
-        $candidates += (Join-Path $RepoRootResolved 'Tooling\runner-cli\RunnerCli\bin\Release\net8.0' $Runtime $CliFile)
+        $publishRoot = Join-Path -Path $RepoRootResolved -ChildPath 'Tooling\runner-cli\publish'
+        $releaseRoot = Join-Path -Path $RepoRootResolved -ChildPath 'Tooling\runner-cli\RunnerCli\bin\Release\net8.0'
+        $runtimePublishRoot = Join-Path -Path (Join-Path -Path $releaseRoot -ChildPath $Runtime) -ChildPath 'publish'
+        $runtimeRoot = Join-Path -Path $releaseRoot -ChildPath $Runtime
+
+        $candidates += (Join-Path -Path (Join-Path -Path $publishRoot -ChildPath $Runtime) -ChildPath $CliFile)
+        $candidates += (Join-Path -Path $runtimePublishRoot -ChildPath $CliFile)
+        $candidates += (Join-Path -Path $runtimeRoot -ChildPath $CliFile)
     }
     if (-not [string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
-        $candidates += (Join-Path $env:RUNNER_TEMP 'runner-cli' $CliFile)
+        $runnerTempCliDir = Join-Path -Path $env:RUNNER_TEMP -ChildPath 'runner-cli'
+        $candidates += (Join-Path -Path $runnerTempCliDir -ChildPath $CliFile)
     }
 
     foreach ($candidate in $candidates) {

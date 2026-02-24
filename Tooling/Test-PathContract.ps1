@@ -1,4 +1,3 @@
-#Requires -Version 7.0
 [CmdletBinding()]
 param(
     [string]$RepoRoot = '.',
@@ -7,6 +6,33 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $windowsContainerShellContract = 'powershell.exe 5.1'
+
+function Get-LvieRelativePath {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RootPath,
+        [Parameter(Mandatory = $true)]
+        [string]$FullPath
+    )
+
+    $pathType = [System.IO.Path]
+    $relativePathMethod = $pathType.GetMethod('GetRelativePath', [Type[]]@([string], [string]))
+    if ($null -ne $relativePathMethod) {
+        return [System.IO.Path]::GetRelativePath($RootPath, $FullPath)
+    }
+
+    $resolvedRoot = [System.IO.Path]::GetFullPath($RootPath)
+    if (-not $resolvedRoot.EndsWith([System.IO.Path]::DirectorySeparatorChar)) {
+        $resolvedRoot += [System.IO.Path]::DirectorySeparatorChar
+    }
+
+    $resolvedPath = [System.IO.Path]::GetFullPath($FullPath)
+    $rootUri = New-Object System.Uri($resolvedRoot)
+    $pathUri = New-Object System.Uri($resolvedPath)
+    $relativePath = [System.Uri]::UnescapeDataString($rootUri.MakeRelativeUri($pathUri).ToString())
+    return ($relativePath -replace '/', '\')
+}
 
 $repoRootPath = (Resolve-Path -Path $RepoRoot -ErrorAction Stop).Path
 $allowedLiteralPathSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
@@ -47,7 +73,7 @@ foreach ($scanRoot in $scanRoots) {
 $literalPatterns = @('/workspace', 'C:\workspace')
 $violationList = New-Object System.Collections.Generic.List[object]
 foreach ($file in $candidateFiles) {
-    $relativePath = [System.IO.Path]::GetRelativePath($repoRootPath, $file.FullName) -replace '\\', '/'
+    $relativePath = (Get-LvieRelativePath -RootPath $repoRootPath -FullPath $file.FullName) -replace '\\', '/'
     $lineItems = Get-Content -LiteralPath $file.FullName -ErrorAction Stop
     $lineNumber = 0
     foreach ($lineText in $lineItems) {

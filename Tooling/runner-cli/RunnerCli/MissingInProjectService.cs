@@ -82,7 +82,9 @@ public static class MissingInProjectService
             args.Add(options.ConnectTimeoutMs.Value.ToString());
         }
 
-        var commandLine = $"pwsh {string.Join(' ', args.Select(QuoteIfNeeded))}";
+        var powerShellExecutable = PowerShellHostResolver.ResolveExecutable();
+        var powerShellDisplayName = PowerShellHostResolver.GetDisplayName(powerShellExecutable);
+        var commandLine = $"{QuoteIfNeeded(powerShellDisplayName)} {string.Join(' ', args.Select(QuoteIfNeeded))}";
         Console.Error.WriteLine($"missing-in-project command: {commandLine}");
 
         if (options.DryRun)
@@ -92,7 +94,7 @@ public static class MissingInProjectService
 
         var psi = new ProcessStartInfo
         {
-            FileName = "pwsh",
+            FileName = powerShellExecutable,
             WorkingDirectory = repoRoot,
             UseShellExecute = false
         };
@@ -104,7 +106,7 @@ public static class MissingInProjectService
         using var process = Process.Start(psi);
         if (process is null)
         {
-            Console.Error.WriteLine("ERROR: Failed to start pwsh for missing-in-project.");
+            Console.Error.WriteLine($"ERROR: Failed to start {powerShellDisplayName} for missing-in-project.");
             return 1;
         }
 

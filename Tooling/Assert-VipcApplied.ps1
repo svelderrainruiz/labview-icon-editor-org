@@ -1,4 +1,3 @@
-#Requires -Version 7.0
 <#
 .SYNOPSIS
     Verifies that VIPC package versions are installed for a LabVIEW bitness.

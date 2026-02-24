@@ -34,13 +34,18 @@ internal static class PowerShellScriptRunner
         var args = new List<string>
         {
             "-NoProfile",
+            "-ExecutionPolicy",
+            "RemoteSigned",
             "-File",
             scriptPath
         };
         args.AddRange(scriptArguments);
         ValidateExecutionPolicyArgs(args, commandLabel);
 
-        var commandLine = $"pwsh {string.Join(' ', args.Select(QuoteIfNeeded))}";
+        var preferWindowsPowerShell = !ScriptLikelyRequiresPwsh(scriptPath);
+        var powerShellExecutable = PowerShellHostResolver.ResolveExecutable(preferWindowsPowerShell);
+        var powerShellDisplayName = PowerShellHostResolver.GetDisplayName(powerShellExecutable);
+        var commandLine = $"{QuoteIfNeeded(powerShellDisplayName)} {string.Join(' ', args.Select(QuoteIfNeeded))}";
         Console.Error.WriteLine($"{commandLabel} command: {commandLine}");
 
         if (dryRun)
@@ -50,7 +55,7 @@ internal static class PowerShellScriptRunner
 
         var psi = new ProcessStartInfo
         {
-            FileName = "pwsh",
+            FileName = powerShellExecutable,
             WorkingDirectory = resolvedRepoRoot,
             UseShellExecute = false
         };
@@ -63,7 +68,7 @@ internal static class PowerShellScriptRunner
         using var process = Process.Start(psi);
         if (process is null)
         {
-            Console.Error.WriteLine($"ERROR: Failed to start pwsh for {commandLabel}.");
+            Console.Error.WriteLine($"ERROR: Failed to start {powerShellDisplayName} for {commandLabel}.");
             return 1;
         }
 
@@ -81,6 +86,32 @@ internal static class PowerShellScriptRunner
         return value.Contains(' ', StringComparison.Ordinal)
             ? $"\"{value}\""
             : value;
+    }
+
+    private static bool ScriptLikelyRequiresPwsh(string scriptPath)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(scriptPath) || !File.Exists(scriptPath))
+        {
+            return false;
+        }
+
+        try
+        {
+            var content = File.ReadAllText(scriptPath);
+            return content.Contains("#Requires -Version 7.0", StringComparison.OrdinalIgnoreCase)
+                || content.Contains("Invoke-Preflight.ps1", StringComparison.OrdinalIgnoreCase)
+                || content.Contains("Tooling\\support\\LabVIEWVersion.ps1", StringComparison.OrdinalIgnoreCase)
+                || content.Contains("Tooling/support/LabVIEWVersion.ps1", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static void ValidateExecutionPolicyArgs(IReadOnlyList<string> args, string commandLabel)
