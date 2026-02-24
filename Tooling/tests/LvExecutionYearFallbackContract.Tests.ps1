@@ -11,12 +11,14 @@ Describe 'LabVIEW execution-year fallback contract' {
         $script:buildVipScriptPath = Join-Path $script:repoRoot '.github\actions\build-vip\build_vip.ps1'
         $script:labviewExeResolverPath = Join-Path $script:repoRoot 'Tooling\support\LabVIEWExecutablePath.ps1'
         $script:labviewCliPortContractPath = Join-Path $script:repoRoot 'Tooling\support\LabVIEWCliPortContract.ps1'
+        $script:gcliRunnerPath = Join-Path $script:repoRoot 'Tooling\support\GcliRunner.ps1'
 
         $script:pplBuildScriptContent = Get-Content -Path $script:pplBuildScriptPath -Raw
         $script:invokeVipBuildContent = Get-Content -Path $script:invokeVipBuildPath -Raw
         $script:buildVipScriptContent = Get-Content -Path $script:buildVipScriptPath -Raw
         $script:labviewExeResolverContent = Get-Content -Path $script:labviewExeResolverPath -Raw
         $script:labviewCliPortContractContent = Get-Content -Path $script:labviewCliPortContractPath -Raw
+        $script:gcliRunnerContent = Get-Content -Path $script:gcliRunnerPath -Raw
     }
 
     It 'BuildProjectSpec accepts execution-year override and keeps source version contract' {
@@ -53,5 +55,6 @@ Describe 'LabVIEW execution-year fallback contract' {
         $script:buildVipScriptContent | Should -Match '\$lvNumericMajor\s*=\s*\[int\]\$resolvedExecutionLabVIEWYear - 2000'
         $script:buildVipScriptContent | Should -Match 'VIPM target fallback applied'
         $script:buildVipScriptContent | Should -Match 'major-compatible target'
+        $script:gcliRunnerContent | Should -Not -Match '(?m)^\s*#Requires\s+-Version'
     }
 }
