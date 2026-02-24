@@ -34,6 +34,8 @@ internal static class PowerShellScriptRunner
         var args = new List<string>
         {
             "-NoProfile",
+            "-ExecutionPolicy",
+            "RemoteSigned",
             "-File",
             scriptPath
         };

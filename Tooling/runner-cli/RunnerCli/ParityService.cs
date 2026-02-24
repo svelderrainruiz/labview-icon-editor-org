@@ -225,6 +225,8 @@ public static class ParityService
             new[]
             {
                 "-NoProfile",
+                "-ExecutionPolicy",
+                "RemoteSigned",
                 "-File",
                 Path.Combine(context.RepoRoot, "Tooling", "Test-PathContract.ps1"),
                 "-WriteSummary"
@@ -322,6 +324,8 @@ public static class ParityService
         var args = new List<string>
         {
             "-NoProfile",
+            "-ExecutionPolicy",
+            "RemoteSigned",
             "-File",
             scriptPath,
             "-WorkspaceRoot",
@@ -424,7 +428,7 @@ public static class ParityService
         var powerShellExecutable = PowerShellHostResolver.ResolveExecutable();
         var result = RunProcess(
             powerShellExecutable,
-            new[] { "-NoProfile", "-Command", command },
+            new[] { "-NoProfile", "-ExecutionPolicy", "RemoteSigned", "-Command", command },
             context.RepoRoot,
             throwOnError: true);
 
