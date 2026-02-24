@@ -40,7 +40,9 @@ internal static class PowerShellScriptRunner
         args.AddRange(scriptArguments);
         ValidateExecutionPolicyArgs(args, commandLabel);
 
-        var commandLine = $"pwsh {string.Join(' ', args.Select(QuoteIfNeeded))}";
+        var powerShellExecutable = PowerShellHostResolver.ResolveExecutable();
+        var powerShellDisplayName = PowerShellHostResolver.GetDisplayName(powerShellExecutable);
+        var commandLine = $"{QuoteIfNeeded(powerShellDisplayName)} {string.Join(' ', args.Select(QuoteIfNeeded))}";
         Console.Error.WriteLine($"{commandLabel} command: {commandLine}");
 
         if (dryRun)
@@ -50,7 +52,7 @@ internal static class PowerShellScriptRunner
 
         var psi = new ProcessStartInfo
         {
-            FileName = "pwsh",
+            FileName = powerShellExecutable,
             WorkingDirectory = resolvedRepoRoot,
             UseShellExecute = false
         };
@@ -63,7 +65,7 @@ internal static class PowerShellScriptRunner
         using var process = Process.Start(psi);
         if (process is null)
         {
-            Console.Error.WriteLine($"ERROR: Failed to start pwsh for {commandLabel}.");
+            Console.Error.WriteLine($"ERROR: Failed to start {powerShellDisplayName} for {commandLabel}.");
             return 1;
         }
 

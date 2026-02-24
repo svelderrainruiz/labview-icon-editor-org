@@ -102,10 +102,10 @@ This table applies to commands in scope for v5.1 Core and Extended profiles.
 | pylavi scan | Windows, Linux, macOS | Requires vi_validate on PATH; .lvversion is required when version gating is enabled. |
 | pylavi summarize | Windows, Linux, macOS | none (reads offenders JSON). |
 | pylavi fetch | Windows, Linux, macOS | Requires GitHub API token via --token, GH_TOKEN, or GITHUB_TOKEN. |
-| missing-in-project | Windows only | Requires pwsh on PATH; .github/actions/missing-in-project/Invoke-MissingInProjectCLI.ps1 is required to exist; LabVIEW + g-cli are required by the PowerShell script. |
-| ppl build | Windows only | Requires pwsh on PATH; .github/actions/build-lvlibp/BuildProjectSpec.ps1 is required to exist; LabVIEWCLI is required by the PowerShell script. |
-| dev-mode prepare-source | Windows only | Requires pwsh on PATH; .github/actions/prepare-labview-source/Prepare_LabVIEW_source.ps1 is required to exist; LabVIEW + g-cli are required by the PowerShell script. |
-| dev-mode restore-source | Windows only | Requires pwsh on PATH; .github/actions/restore-setup-lv-source/RestoreSetupLVSource.ps1 is required to exist; LabVIEW + g-cli are required by the PowerShell script. |
+| missing-in-project | Windows only | Requires a PowerShell host on PATH (Windows PowerShell preferred, pwsh fallback); .github/actions/missing-in-project/Invoke-MissingInProjectCLI.ps1 is required to exist; LabVIEW + g-cli are required by the PowerShell script. |
+| ppl build | Windows only | Requires a PowerShell host on PATH (Windows PowerShell preferred, pwsh fallback); .github/actions/build-lvlibp/BuildProjectSpec.ps1 is required to exist; LabVIEWCLI is required by the PowerShell script. |
+| dev-mode prepare-source | Windows only | Requires a PowerShell host on PATH (Windows PowerShell preferred, pwsh fallback); .github/actions/prepare-labview-source/Prepare_LabVIEW_source.ps1 is required to exist; LabVIEW + g-cli are required by the PowerShell script. |
+| dev-mode restore-source | Windows only | Requires a PowerShell host on PATH (Windows PowerShell preferred, pwsh fallback); .github/actions/restore-setup-lv-source/RestoreSetupLVSource.ps1 is required to exist; LabVIEW + g-cli are required by the PowerShell script. |
 | manifest | Windows, Linux, macOS | none |
 | conformance check | Windows, Linux, macOS | none (uses local requirement and trace artifacts). |
 
@@ -114,7 +114,7 @@ RC-PLAT-002: missing-in-project shall be supported on Windows only.
 RC-PLAT-003: pylavi scan shall require vi_validate to be available on PATH.
 RC-PLAT-004: validate-contract shall require git availability when safe.directory validation is enabled.
 RC-PLAT-005: pylavi fetch shall require a GitHub API token from --token, GH_TOKEN, or GITHUB_TOKEN.
-RC-PLAT-006: missing-in-project shall require pwsh on PATH and the missing-in-project PowerShell script to be present.
+RC-PLAT-006: missing-in-project shall require a PowerShell host on PATH (Windows PowerShell preferred on Windows) and the missing-in-project PowerShell script to be present.
 RC-PLAT-007: manifest shall be supported on Windows, Linux, and macOS.
 RC-PLAT-008: conformance check shall be supported on Windows, Linux, and macOS.
 RC-PLAT-009: Core conformance evidence for commands supported on Windows, Linux, and macOS shall include at least one hosted Linux execution and one hosted Windows execution.
@@ -673,9 +673,9 @@ Options
 Behavior
 
 RC-MIP-001: On non-Windows platforms, the command shall exit with code 1 and emit an ERROR: line stating the command is Windows-only.
-RC-MIP-002: On Windows and when --dry-run is not set, the command shall invoke .github/actions/missing-in-project/Invoke-MissingInProjectCLI.ps1 using pwsh.
+RC-MIP-002: On Windows and when --dry-run is not set, the command shall invoke .github/actions/missing-in-project/Invoke-MissingInProjectCLI.ps1 using a resolved PowerShell host (Windows PowerShell preferred, pwsh fallback).
 RC-MIP-003: The command shall resolve --project-file relative to the resolved repo root when it is not absolute.
-RC-MIP-004: The command shall write the constructed pwsh command line string to stderr before conditional script invocation behavior is evaluated.
+RC-MIP-004: The command shall write the constructed PowerShell command line string to stderr before conditional script invocation behavior is evaluated.
 RC-MIP-005: When --dry-run is set, the command shall exit with code 0 and shall not launch the PowerShell script process.
 RC-MIP-006: When --dry-run is not set, the command shall forward the exit code from the PowerShell script as its own exit code.
 

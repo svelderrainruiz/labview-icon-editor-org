@@ -607,6 +607,7 @@ public class RunnerCliCliTests
         Assert.Equal(0, exitCode);
         Assert.Contains("missing-in-project command:", stderr, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("missing-in-project command:", stdout, StringComparison.OrdinalIgnoreCase);
+        AssertUsesWindowsPowerShellHost(stderr);
         Assert.False(File.Exists(fixture.SentinelPath), "dry-run should not execute the script.");
     }
 
@@ -633,6 +634,7 @@ public class RunnerCliCliTests
         Assert.Equal(7, exitCode);
         Assert.Contains("missing-in-project command:", stderr, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("missing-in-project command:", stdout, StringComparison.OrdinalIgnoreCase);
+        AssertUsesWindowsPowerShellHost(stderr);
         Assert.True(File.Exists(fixture.SentinelPath), "non-dry-run should execute the script.");
     }
 
@@ -794,6 +796,7 @@ public class RunnerCliCliTests
         Assert.Contains("ppl build command:", stderr, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("BuildProjectSpec.ps1", stderr, StringComparison.OrdinalIgnoreCase);
         Assert.Contains($"-ExecutionLabVIEWYear {expectedExecutionYear}", stderr, StringComparison.OrdinalIgnoreCase);
+        AssertUsesWindowsPowerShellHost(stderr);
     }
 
     [Fact]
@@ -816,6 +819,7 @@ public class RunnerCliCliTests
         Assert.True(string.IsNullOrWhiteSpace(stdout), $"stdout: {stdout}");
         Assert.Contains("dev-mode prepare-source command:", stderr, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Prepare_LabVIEW_source.ps1", stderr, StringComparison.OrdinalIgnoreCase);
+        AssertUsesWindowsPowerShellHost(stderr);
     }
 
     [Fact]
@@ -838,6 +842,7 @@ public class RunnerCliCliTests
         Assert.True(string.IsNullOrWhiteSpace(stdout), $"stdout: {stdout}");
         Assert.Contains("dev-mode restore-source command:", stderr, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("RestoreSetupLVSource.ps1", stderr, StringComparison.OrdinalIgnoreCase);
+        AssertUsesWindowsPowerShellHost(stderr);
     }
 
     [Fact]
@@ -1240,5 +1245,17 @@ public class RunnerCliCliTests
 
         value = default;
         return false;
+    }
+
+    private static void AssertUsesWindowsPowerShellHost(string commandOutput)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        Assert.Contains("powershell", commandOutput, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("pwsh.exe", commandOutput, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(" pwsh ", commandOutput, StringComparison.OrdinalIgnoreCase);
     }
 }
