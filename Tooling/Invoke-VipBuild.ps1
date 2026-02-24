@@ -1,5 +1,3 @@
-#Requires -Version 7.0
-
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
@@ -38,6 +36,24 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+function Resolve-PowerShellHostPath {
+    $isWindowsHost = [string]::Equals($env:OS, 'Windows_NT', [System.StringComparison]::OrdinalIgnoreCase)
+    $candidates = if ($isWindowsHost) {
+        @('powershell.exe', 'powershell', 'pwsh.exe', 'pwsh')
+    } else {
+        @('pwsh', 'pwsh.exe', 'powershell', 'powershell.exe')
+    }
+
+    foreach ($candidate in $candidates) {
+        $command = Get-Command -Name $candidate -CommandType Application -ErrorAction SilentlyContinue
+        if ($null -ne $command -and -not [string]::IsNullOrWhiteSpace($command.Source)) {
+            return $command.Source
+        }
+    }
+
+    throw "Unable to resolve a PowerShell host executable (tried: $($candidates -join ', '))."
+}
 
 function Resolve-IntSetting {
     param(
@@ -280,8 +296,10 @@ try {
     throw "Failed to write display information JSON to $displayInfoPath. $($_.Exception.Message)"
 }
 
-$pwshArgs = @(
+$powerShellHost = Resolve-PowerShellHostPath
+$powerShellArgs = @(
     '-NoProfile',
+    '-ExecutionPolicy', 'RemoteSigned',
     '-File', $buildVipScript,
     '-SupportedBitness', $SupportedBitness,
     '-RepoRoot', $resolvedRepoRoot,
@@ -300,14 +318,14 @@ $pwshArgs = @(
 )
 
 if (-not [string]::IsNullOrWhiteSpace($WorktreeRoot)) {
-    $pwshArgs += @('-WorktreeRoot', $WorktreeRoot)
+    $powerShellArgs += @('-WorktreeRoot', $WorktreeRoot)
 }
 if ($SkipWorktreeRootCheck.IsPresent) {
-    $pwshArgs += '-SkipWorktreeRootCheck'
+    $powerShellArgs += '-SkipWorktreeRootCheck'
 }
 
 try {
-    & pwsh @pwshArgs
+    & $powerShellHost @powerShellArgs
     $lastExitCode = if ($LASTEXITCODE -ne $null) { $LASTEXITCODE } else { 0 }
     if ($lastExitCode -ne 0) {
         $success = $false
