@@ -119,7 +119,7 @@ Below is a **high-level** breakdown. In your `.github/workflows/ci.yml`, these s
 
 <a name="build--artifact-handling"></a>
 ### **Build & Artifact Handling**
-- Uses the `build-project-spec` and `build-vi-package` actions to compile code and produce the `.vip` package.
+- Uses `ci.yml` jobs (`build-ppl-*` and `build-vip`) to compile packed libraries and produce the `.vip` package.
 
 <a name="artifact-upload-only"></a>
 ### **Artifact Upload Only**

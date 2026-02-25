@@ -24,7 +24,7 @@ In a multi-fork or multi-organization environment, **injecting the repository na
 We achieve this by:
 1. **Generating** a JSON object with fields like `"Company Name"` and `"Author Name (Person or Company)"` directly in the workflow using GitHub-provided variables (e.g., `${{ github.repository_owner }}` and `${{ github.event.repository.name }}`).
 2. **Using** the `modify-vipb-display-info` action to merge this JSON into the `.vipb` (VI Package Builder) file.
-3. **Building** the package with the `build-project-spec` and `build-vi-package` actions from the composite CI workflow.
+3. **Building** the package in `ci.yml` using the `build-ppl-*` jobs and the `build-vip` job after the display-info update.
 
 ---
 
@@ -44,83 +44,7 @@ We achieve this by:
 
 ## GitHub Actions and PowerShell
 
-An abbreviated **GitHub Actions** example below mirrors the [`ci.yml`](../../../.github/workflows/ci.yml) workflow. A **`version`** job first computes the semantic version and outputs `MAJOR`, `MINOR`, `PATCH`, and `BUILD` for downstream steps. The **`build-ppl`** job uses a matrix to compile both 32- and 64-bit packed libraries, and the **`build-vi-package`** job injects the display metadata and creates the final `.vip` file. Referring to the jobs by name—rather than line numbers—helps avoid future drift. The snippet highlights key steps such as `compute-version`, `build-project-spec`, `modify-vipb-display-info`, and `build-vi-package`:
-
-```yaml
-jobs:
-  version:
-    runs-on: self-hosted-windows-lv-ie
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - id: compute-version
-        uses: ./.github/actions/compute-version
-    outputs:
-      MAJOR: ${{ steps.compute-version.outputs.MAJOR }}
-      MINOR: ${{ steps.compute-version.outputs.MINOR }}
-      PATCH: ${{ steps.compute-version.outputs.PATCH }}
-      BUILD: ${{ steps.compute-version.outputs.BUILD }}
-  build-ppl:
-    runs-on: self-hosted-windows-lv-ie
-    needs: version
-    strategy:
-      matrix:
-        bitness: [32, 64]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/build-project-spec
-        with:
-          project_spec_type: PackedLibrary
-          build_spec_name: Editor Packed Library
-          output_relative_path: resource/plugins/lv_icon.lvlibp
-          supported_bitness: ${{ matrix.bitness }}
-          repo_root: ${{ github.workspace }}
-          major: ${{ needs.version.outputs.MAJOR }}
-          minor: ${{ needs.version.outputs.MINOR }}
-          patch: ${{ needs.version.outputs.PATCH }}
-          build: ${{ needs.version.outputs.BUILD }}
-          commit: ${{ github.sha }}
-
-  build-vi-package:
-    runs-on: self-hosted-windows-lv-ie
-    needs: [build-ppl, version]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Generate display information JSON
-        id: display-info
-        shell: pwsh
-        run: |
-          $info = @{
-            "Company Name" = "${{ github.repository_owner }}"
-            "Author Name (Person or Company)" = "${{ github.event.repository.name }}"
-          }
-          "json=$($info | ConvertTo-Json -Depth 5 -Compress)" >> $Env:GITHUB_OUTPUT
-      - uses: ./.github/actions/modify-vipb-display-info
-        with:
-          vipb_path: .github/actions/build-vi-package/NI Icon editor.vipb
-          repo_root: ${{ github.workspace }}
-          supported_bitness: 64
-          major: ${{ needs.version.outputs.MAJOR }}
-          minor: ${{ needs.version.outputs.MINOR }}
-          patch: ${{ needs.version.outputs.PATCH }}
-          build: ${{ needs.version.outputs.BUILD }}
-          commit: ${{ github.sha }}
-          release_notes_file: ${{ github.workspace }}/Tooling/deployment/release_notes.md
-          display_information_json: ${{ steps.display-info.outputs.json }}
-      - uses: ./.github/actions/build-vi-package
-        with:
-          supported_bitness: 64
-          major: ${{ needs.version.outputs.MAJOR }}
-          minor: ${{ needs.version.outputs.MINOR }}
-          patch: ${{ needs.version.outputs.PATCH }}
-          build: ${{ needs.version.outputs.BUILD }}
-          commit: ${{ github.sha }}
-          release_notes_file: ${{ github.workspace }}/Tooling/deployment/release_notes.md
-          display_information_json: ${{ steps.display-info.outputs.json }}
-```
-
-> **Note:** `build-vi-package` runs outside the bitness matrix because the Icon Editor ships only a 64-bit VI Package; packaging the 32-bit output would duplicate artifacts.
+An abbreviated **GitHub Actions** outline mirrors the [`ci.yml`](../../../.github/workflows/ci.yml) workflow. A **`version`** job computes the semantic version and outputs `MAJOR`, `MINOR`, `PATCH`, and `BUILD` for downstream steps. The **`build-ppl-*`** jobs compile the 32- and 64-bit packed libraries, and the **`build-vip`** job injects display metadata and assembles the final `.vip`. Refer to `ci.yml` for the canonical steps and inputs.
 
 **Key points**:
 - **`${{ github.repository_owner }}`** is the **organization** (or user) that owns the repo.
@@ -130,7 +54,7 @@ jobs:
   - the repository URL (with a fallback to `https://github.com/<owner>/<repo>`);
   - descriptive text derived from the repository description when it exists, or a generated default when it does not;
   - the contents of the workflow-generated `Tooling/deployment/release_notes.md` file as the **Release Notes - Change Log** field.
-- `modify-vipb-display-info` and `build-vi-package` consume this JSON to embed the metadata directly in the `.vip`.
+- `modify-vipb-display-info` and `build-vip` consume this JSON to embed the metadata directly in the `.vip`.
 
 ---
 
@@ -140,10 +64,10 @@ jobs:
 2. **GitHub Actions** triggers the workflow.  
 3. **Actions** check out the repo and run the build actions:
    1. `compute-version` determines the semantic version.
-   2. `build-project-spec` compiles the **32- and 64-bit** packed libraries.
+   2. `build-ppl-*` compiles the **32- and 64-bit** packed libraries.
    3. A PowerShell step generates JSON with `CompanyName` and `AuthorName` fields derived from GitHub variables.
    4. `modify-vipb-display-info` merges that JSON into the `.vipb` file.
-   5. `build-vi-package` produces the final **64-bit LabVIEW 2026 (26.1)** Icon Editor `.vip` package.
+   5. `build-vip` produces the final **64-bit LabVIEW 2026 (26.1)** Icon Editor `.vip` package.
 4. **Actions** can then upload the resulting `.vip` as an artifact.
 
 ---

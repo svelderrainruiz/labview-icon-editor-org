@@ -114,7 +114,7 @@ Expected result:
 | --- | --- | --- |
 | Contract guard failure | Guard script output | Fix violated contract; rerun `-Mode validate`. |
 | Workflow contract failure | `Test-SoloMaintainerWorkflowContract.ps1` | Restore manual-only triggers / pipeline-contract / publish-intent tokens. |
-| Container parity failure | `Run-CI.ps1` / `Run-CI.sh` logs | Re-run with same mode; inspect `TestResults/agent-logs`. |
+| Container parity failure | `ci.yml` logs | Re-run the workflow and inspect container-parity job logs. |
 | Release gate failure | `publish-gate` or `publish-prerelease` logs | Confirm dispatch inputs and required asset pipeline outcomes. |
 
 ## Related Policy
