@@ -277,6 +277,7 @@ if (-not (Test-Path -LiteralPath $ciWorkflowPath -PathType Leaf)) {
         'codex-skill-layer-asset',
         'publish-gate',
         'publish-prerelease',
+        'governance-contract',
         'pipeline-contract',
         'required-context'
     )
