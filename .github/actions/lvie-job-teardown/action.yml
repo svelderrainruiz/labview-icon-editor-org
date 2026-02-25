@@ -1,13 +1,6 @@
 name: LVIE Job Teardown
-description: Standard teardown for self-hosted LabVIEW jobs (revert dev mode, close LabVIEW, cleanup, release lock).
+description: Standard teardown for self-hosted LabVIEW jobs (close LabVIEW, cleanup, release lock).
 inputs:
-  revert_dev_mode:
-    description: Revert development mode using RevertDevelopmentMode.ps1.
-    required: false
-    default: 'false'
-  revert_bitness:
-    description: LabVIEW bitness for dev-mode revert.
-    required: false
   close_labview:
     description: Close LabVIEW using Close_LabVIEW.ps1.
     required: false
@@ -36,46 +29,6 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Revert development mode
-      if: ${{ inputs.revert_dev_mode == 'true' }}
-      shell: pwsh
-      run: |
-        $labviewVersion = '${{ inputs.labview_version }}'
-        $bitness = '${{ inputs.revert_bitness }}'
-        if ([string]::IsNullOrWhiteSpace($bitness)) {
-          throw "revert_bitness input is required when revert_dev_mode is true."
-        }
-        $repoRoot = '${{ inputs.repo_root }}'
-        if ([string]::IsNullOrWhiteSpace($repoRoot)) {
-          $repoRoot = $env:REPO_ROOT
-        }
-        if ([string]::IsNullOrWhiteSpace($repoRoot)) {
-          $repoRoot = $env:GITHUB_WORKSPACE
-        }
-        if ([string]::IsNullOrWhiteSpace($repoRoot)) {
-          throw "repo_root is required."
-        }
-        $repoRoot = (Resolve-Path -Path $repoRoot -ErrorAction Stop).Path
-
-        if ([string]::IsNullOrWhiteSpace($labviewVersion)) {
-          $labviewVersion = $env:LABVIEW_VERSION_RAW
-        }
-        if ([string]::IsNullOrWhiteSpace($labviewVersion)) {
-          $labviewVersion = $env:LABVIEW_VERSION_YEAR
-        }
-        $assertScript = Join-Path $repoRoot 'Tooling\Assert-LabVIEWVersion.ps1'
-        if (-not (Test-Path -Path $assertScript)) {
-          throw "Assert-LabVIEWVersion.ps1 not found at $assertScript"
-        }
-        $lvInfo = & $assertScript -RepoRoot $repoRoot -ExpectedVersion $labviewVersion -Context 'lvie-job-teardown-revert'
-        if ([string]::IsNullOrWhiteSpace($labviewVersion)) {
-          Write-Warning "labview_version not provided; using .lvversion ($($lvInfo.Raw))."
-        }
-        $labviewVersion = $lvInfo.Raw
-        & "$repoRoot\\.github\\actions\\revert-development-mode\\RevertDevelopmentMode.ps1" `
-          -LabVIEWVersion $labviewVersion `
-          -SupportedBitness $bitness `
-          -RepoRoot "$repoRoot"
     - name: Close LabVIEW
       if: ${{ inputs.close_labview == 'true' }}
       shell: pwsh

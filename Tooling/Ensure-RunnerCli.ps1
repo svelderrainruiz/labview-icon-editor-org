@@ -206,9 +206,9 @@ function Get-RunnerCliArtifact {
         return $true
     }
 
-    Write-Host ("Downloading runner-cli artifact for {0}@{1}..." -f $RepoValue, $branch)
+    Write-Host ("Downloading runner-cli artifact from ci.yml for {0}@{1}..." -f $RepoValue, $branch)
     try {
-        $runs = gh run list -R $RepoValue -w runner-cli.yml -b $branch -s success -L 1 --json databaseId | ConvertFrom-Json
+        $runs = gh run list -R $RepoValue -w ci.yml -b $branch -s success -L 1 --json databaseId | ConvertFrom-Json
     } catch {
         Write-Warning ("Failed to query workflow runs: {0}" -f $_.Exception.Message)
         return $false

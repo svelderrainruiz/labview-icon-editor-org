@@ -277,6 +277,7 @@ if (-not (Test-Path -LiteralPath $ciWorkflowPath -PathType Leaf)) {
         'codex-skill-layer-asset',
         'publish-gate',
         'publish-prerelease',
+        'governance-contract',
         'pipeline-contract',
         'required-context'
     )
@@ -318,9 +319,6 @@ $coreDocs = @(
     'docs/README.md',
     'docs/ci-workflows.md',
     'docs/ci/troubleshooting-faq.md',
-    'docs/manual-instructions.md',
-    'docs/automated-setup.md',
-    'docs/powershell-dependency-scripts.md',
     'docs/ci/actions/build-vi-package.md',
     'docs/ci/actions/runner-setup-guide.md',
     'Tooling/README.md',

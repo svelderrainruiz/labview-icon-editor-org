@@ -15,7 +15,7 @@ This repository uses LabVIEW, g-cli, and PowerShell tooling. Follow the steps be
 - Confirm `g-cli` is available:
   - `g-cli --version`
 - Resolve the current repository for `gh` commands:
-  - `$repo = pwsh -NoProfile -File .\Tooling\Resolve-GitHubRepo.ps1`
+  - `$repo = gh repo view --json nameWithOwner --jq .nameWithOwner`
   - `GH_REPO` is an optional override and takes precedence when set.
 - If you need to open a PR from the current branch, use `gh`:
   - Default template: `gh pr create --repo $repo --base develop -T .github/PULL_REQUEST_TEMPLATE.md`
@@ -24,12 +24,11 @@ This repository uses LabVIEW, g-cli, and PowerShell tooling. Follow the steps be
 ## Repo-Agnostic Issue/Discussion Policy
 - Issue and discussion actions operate on the repository currently being worked in.
 - Use this command before issue/PR/workflow operations:
-  - `$repo = pwsh -NoProfile -File .\Tooling\Resolve-GitHubRepo.ps1`
+  - `$repo = gh repo view --json nameWithOwner --jq .nameWithOwner`
 - Examples:
   - Create issue: `gh issue create --repo $repo --template "Bug Report"`
   - Create PR: `gh pr create --repo $repo --base develop -T .github/PULL_REQUEST_TEMPLATE.md`
   - List issues: `gh issue list --repo $repo --limit 50`
-  - Run workflow: `gh workflow run labels-sync.yml --repo $repo -f dry_run=true -f include_aliases=true`
 
 ## GitHub Templates and Labels
 - Use issue templates with `gh` (preferred):
@@ -62,35 +61,6 @@ Label policy:
   - `patch` -> `Version Increment: Patch`
   - `bug` -> `Issue group: Bug`
   - `enhancement` -> `Type: Enhancement`
-- Sync labels from contract (manual workflow):
-  - Dry run: `gh workflow run labels-sync.yml --repo $repo -f dry_run=true -f include_aliases=true`
-  - Apply: `gh workflow run labels-sync.yml --repo $repo -f dry_run=false -f include_aliases=true`
-
-Stale issue policy:
-- Workflow: `.github/workflows/stale-issues.yml`
-- Scope: issues only (PR stale automation is disabled)
-- Thresholds: mark stale at 45 days, auto-close at 14 additional inactive days
-- Exempt labels:
-  - `Workflow: Actively discussing`
-  - `Workflow: NI Approves`
-  - `Workflow: Requires R&D clarification`
-  - `Workflow: Open to contribution`
-  - `Issue group: Added to agenda`
-  - `good first issue`
-- Manual stale candidate query:
-  - ```
-    $cutoff = (Get-Date).AddDays(-45).ToString('yyyy-MM-dd')
-    $query = @(
-      "updated:<$cutoff"
-      '-label:"Workflow: Actively discussing"'
-      '-label:"Workflow: NI Approves"'
-      '-label:"Workflow: Requires R&D clarification"'
-      '-label:"Workflow: Open to contribution"'
-      '-label:"Issue group: Added to agenda"'
-      '-label:"good first issue"'
-    ) -join ' '
-    gh issue list --repo $repo --state open --search $query --limit 200
-    ```
 
 Metadata quick-checks:
 - Unlabeled PRs (no normalized release label):
@@ -106,26 +76,8 @@ Metadata quick-checks:
     } | Select-Object number,title,@{Name='labels';Expression={ $_.labels.name -join ', ' }}
     ```
 
-## CI Debt Training (Issue #74)
-- Install/update the pinned Codex skill layer:
-  - `pwsh -NoProfile -File .\Tooling\Install-CodexSkillLayer.ps1`
-- Codex skill layer preflight (required; hard-fails when missing or invalid):
-  - `pwsh -NoProfile -File .\Tooling\Assert-CodexSkillLayer.ps1`
-- Analyze a specific CI run:
-  - `pwsh -NoProfile -File .\Tooling\Invoke-CiDebtAnalysis.ps1 -Repo $repo -RunId 21840801109`
-- Use fixture-only local validation (no live API calls):
-  - `pwsh -NoProfile -File .\Tooling\Invoke-CiDebtAnalysis.ps1 -Repo $repo -RunId 21840801109 -FixturePath .\Tooling\tests\fixtures\ci-debt\run-21840801109.json`
-- Enforce unknown-signature failures during training:
-  - `pwsh -NoProfile -File .\Tooling\Invoke-CiDebtAnalysis.ps1 -Repo $repo -RunId 21840801109 -FailOnUnknown`
-- Run training workflow manually:
-  - `gh workflow run ci-debt-train.yml --repo $repo -f run_id=21840801109 -f issue_number=74 -f post_comment=true`
-- Run policy gate manually:
-  - `gh workflow run ci-debt-policy-gate.yml --repo $repo -f mode=warn`
-- Local policy check:
-  - `pwsh -NoProfile -File .\Tooling\Test-CiDebtPolicyGate.ps1 -Mode warn`
-
 ## pylavi / vi_validate gate
-- The local CI parity run includes a fast LabVIEW file validation step powered by `pylavi` (`vi_validate`) and runs **before** any g-cli/LabVIEW work.
+- The CI pipeline includes a fast LabVIEW file validation step powered by `pylavi` (`vi_validate`) and runs **before** any g-cli/LabVIEW work.
 - The gate uses `.lvversion` as the canonical LabVIEW version and passes it to `vi_validate --eq` automatically.
 - Absolute-path focus: optionally set `LVIE_PYLAVI_ABSOLUTE_PATH_ROOTS` (semicolon-delimited) to flag specific roots without committing sensitive paths. CI redacts configured roots in logs and the uploaded pylavi log artifact.
 - CI also uploads a redacted top-offenders report artifact per pylavi run (`pylavi-validate-offenders-<label>`) and prints the top offenders table in the step summary.
@@ -143,13 +95,7 @@ Metadata quick-checks:
 - Verify install:
   - `vi_validate --help`
 - If `vi_validate` is not found, ensure your Python Scripts folder is on PATH (typical: `%APPDATA%\Python\Python3x\Scripts`).
-- Skip the gate if needed:
-  - `pwsh -NoProfile -File .\Tooling\Invoke-WorktreeOrchestrator.ps1 -Run -RunArgs -SkipViValidate`
-  - `pwsh -NoProfile -File .\Tooling\Run-CI.ps1 -SkipViValidate`
-- Smoke run (pylavi only):
-  - `pwsh -NoProfile -File .\Tooling\Invoke-WorktreeOrchestrator.ps1 -Run -RunArgs -ViValidateOnly`
-  - `pwsh -NoProfile -File .\Tooling\Run-ViValidate.ps1`
-  - Profiles: `-ViValidateProfile strict|legacy|both` (optional `-ViValidateReportOnly`, `-ViValidateSkipVersionGate`)
+- To re-run in CI, use `workflow_dispatch` on `ci.yml`.
 
 ## VI Analyzer gate
 - Canonical task registry: `Tooling\vi-analyzer\tasks.json` (exactly three tasks for API, plugins, and tooling scopes, mapped to repo-root `.viancfg` files).
@@ -158,11 +104,7 @@ Metadata quick-checks:
 - Runtime worker: `Tooling\container-parity\run-vi-analyzer-linux.sh` (dockerized LabVIEW Linux lane).
 - Local smoke run:
   - `pwsh -NoProfile -File .\Tooling\Run-ViAnalyzer.ps1 -RepoRoot . -SupportedBitness 64`
-- Run-CI controls:
-  - `pwsh -NoProfile -File .\Tooling\Run-CI.ps1 -ViAnalyzerOnly`
-  - `pwsh -NoProfile -File .\Tooling\Run-CI.ps1 -SkipViAnalyzer`
-- Linux parity control:
-  - `LVIE_RUN_VI_ANALYZER=auto|true|false ./Tooling/Run-CI.sh`
+- Use `ci.yml` for deterministic VI Analyzer runs.
   - `auto` runs the gate only when both `pwsh` and `docker` are available; otherwise it prints an explicit skip reason.
 - CI evidence:
   - artifact `vi-analyzer-reports` from `builds/vi-analyzer`
@@ -234,97 +176,6 @@ Notes:
 - Missing-in-project is inlined in `ci.yml` to avoid reusable workflow skips; the standalone workflow is manual only.
 - Self-hosted LabVIEW jobs acquire a runner lock at `<lock_root>\labview-runner.lock` via `Tooling\RunnerLock.ps1`. The lock auto-expires stale entries (lease + optional GitHub run status check) and logs owner metadata. Env overrides: `LVIE_LOCK_ROOT`, `LVIE_RUNNER_LOCK_TIMEOUT_SECONDS`, `LVIE_RUNNER_LOCK_LEASE_SECONDS`, `LVIE_RUNNER_LOCK_STALE_SECONDS`, `LVIE_RUNNER_LOCK_GITHUB_CHECK`, `LVIE_RUNNER_LOCK_GITHUB_MIN_AGE_SECONDS`, `LVIE_RUNNER_LOCK_GITHUB_CHECK_INTERVAL_SECONDS`.
 
-## Local CI Parity (recommended)
-Run the local parity script that mirrors `ci.yml` (preferred entrypoint is the worktree orchestrator):
-```
-pwsh -NoProfile -File .\Tooling\Invoke-WorktreeOrchestrator.ps1 `
-  -Run `
-  -RunArgs
-```
-
-Notes:
-- Outputs go to `$WORKTREE_ROOT\artifacts\<runid>\ci-local` when guardrails are active (default for local runs).
-- GitHub Actions disables artifact roots by default unless `LVIE_ENABLE_ARTIFACT_ROOT=1` or an explicit `-RunId`/`-ArtifactRoot` is passed.
-- The script always runs both 64-bit and 32-bit steps for the `.lvversion` target (currently `20.0` in this repository).
-- The script runs markdown docs lint by default (`Tooling\Invoke-MarkdownLint.ps1` via pinned `markdownlint-cli2`); skip with `-SkipMarkdownLint` or run only docs lint with `-MarkdownLintOnly`.
-- The script handles Verify IE Paths, VIPC audit, unit tests, PPL builds, and VIP build.
-- VIPC default behavior is audit-first (`-VipcMode audit`); optional diagnostics are available via `-VipcMode apply-info` or strict apply via `-VipcMode apply-enforce`.
-- The script runs `vi_validate` (pylavi) and uses `.lvversion` as the canonical LabVIEW version. Skip with `-SkipViValidate`.
-- If you pass `-LabVIEWVersion`, it must match `.lvversion` or the run will fail fast.
-- If LabVIEW or g-cli is already running, the script waits for them to exit before starting.
-- You can skip steps with switches like `-SkipBuildVip` or `-SkipUnitTests`.
-- VIP builds flow through `Tooling\Invoke-VipBuild.ps1`, which emits `builds\status\vip-build.json` and respects `LVIE_VIPM_TIMEOUT_SECONDS` (single-attempt execution; retry env vars are rejected).
-
-## Adaptive timeouts and continuous troubleshooting
-Use fixed timeouts for deterministic CI runs. Use adaptive timeouts only for local/manual runs while tuning.
-
-**CI guidance (deterministic):**
-- Set conservative fixed values and keep them stable across runs.
-- Prefer failing on the status-file contract over wall-clock timing when possible.
-
-**Local guidance (adaptive):**
-There are no fixed timeout defaults. Use the following protocol so timeouts evolve based on actual runtime:
-
-1. Log every command, capture duration, and append a CSV row.
-2. If a timeout occurs, retry once with larger timeouts (e.g. 1.5x or 2x).
-3. Use the last successful durations to set the next run's timeouts:
-   - `ConnectTimeoutMs = max(120000, last_connect_ms * 2)`
-   - `ProcessTimeoutMs = max(300000, last_process_ms * 2)`
-
-Suggested logging wrapper (PowerShell):
-```
-$logRoot = Join-Path $PWD 'TestResults\agent-logs'
-New-Item -Path $logRoot -ItemType Directory -Force | Out-Null
-$timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$logFile = Join-Path $logRoot "run-$timestamp.log"
-$csv = Join-Path $logRoot 'run-history.csv'
-$command = 'pwsh -NoProfile -File .\Tooling\Invoke-WorktreeOrchestrator.ps1 -Run -RunArgs'
-
-$start = Get-Date
-Start-Transcript -Path $logFile -Append | Out-Null
-try {
-  $duration = Measure-Command { Invoke-Expression $command }
-  $status = if ($LASTEXITCODE -eq 0) { 'success' } else { "exit:$LASTEXITCODE" }
-} finally {
-  Stop-Transcript | Out-Null
-  $elapsedSec = [Math]::Round($duration.TotalSeconds, 2)
-  "{0},{1},{2},{3}" -f $timestamp, $status, $elapsedSec, $command | Add-Content -Path $csv
-}
-```
-
-## Proactive belt-and-suspenders loop (standard)
-Use the canonical wrapper to run local parity first, then remote CI for the exact same SHA, then automatic CI debt analysis on remote failure.
-
-Standard command:
-```
-pwsh -NoProfile -File .\Tooling\Invoke-BeltAndSuspendersCI.ps1 `
-  -Sha HEAD
-```
-
-What it does:
-- Runs `Run-CI.ps1` in standardized local mode (`-SkipVerifyIEPaths -SkipMissingInProject -SkipBuildVip`) unless `-SkipLocalParity` is set.
-- Dispatches `CI Pipeline` for the exact target SHA via a temp `ci-run/*` branch.
-- Waits for completion and runs `Tooling\Invoke-CiDebtAnalysis.ps1` automatically on non-success.
-
-Useful switches:
-- `-SkipLocalParity` for remote-only verification.
-- `-FullLocalParity` to override the standardized local mode and require full VIP-producing parity.
-- `-DispatchCleanupRemote` to delete the temporary dispatch branch after completion.
-- `-CiDebtFailOnUnknown` to hard-fail on unknown CI debt signatures.
-- `-MaxLocalAttempts <n>` to tune local parity retries.
-
-Local-only fallback:
-```
-pwsh -NoProfile -File .\Tooling\Run-CI.ps1 `
-  -SkipVerifyIEPaths `
-  -SkipMissingInProject `
-  -SkipBuildVip
-```
-
-Notes:
-- Logs/status are written under `TestResults\agent-logs`.
-- Local parity waits for existing `g-cli`/`LabVIEW` processes and never terminates them.
-
 ## Worktree cleanup
 To keep your configured worktree root tidy, remove old worktrees after you’re done with them.
 
@@ -353,27 +204,11 @@ gh workflow run "CI Pipeline" --ref ci-run/<shortsha> -f expected_sha=<commit> -
 Notes:
 - Delete the temporary branch after dispatch when no longer needed: `git push origin --delete ci-run/<shortsha>`.
 
-## Automatic prerelease publish + deterministic backfill
-Auto path:
-- `.github/workflows/prerelease-auto-dispatch.yml` listens to successful `CI Pipeline` `push` runs on `develop`.
-- It re-checks merged-PR merge-commit eligibility and dispatches strict publish intent through `Tooling\Invoke-DeterministicPrereleasePublish.ps1 -ReleasePriority`.
-
-Fallback helper (manual):
-Use this when replaying publication for a specific merged `develop` SHA:
+## Deterministic prerelease publish (manual)
+Use workflow_dispatch on `ci.yml` with strict SHA inputs:
 ```
-pwsh -NoProfile -File .\Tooling\Invoke-DeterministicPrereleasePublish.ps1
+gh workflow run "CI Pipeline" --ref <ref> -f publish_prerelease=true -f expected_sha=<merged-develop-merge-sha> -f strict_sha=true
 ```
-
-Explicit SHA (and wait for completion):
-```
-pwsh -NoProfile -File .\Tooling\Invoke-DeterministicPrereleasePublish.ps1 `
-  -Sha <merged-develop-merge-sha> `
-  -Wait
-```
-
-Notes:
-- The helper creates a temporary `ci-run` branch ref, dispatches with `publish_prerelease=true`, `expected_sha=<sha>`, and `strict_sha=true`, and deletes the temp ref by default.
-- Optional `-ReleasePriority` selects the release-priority dispatch profile (`force_gcli_lunit=true`).
 
 ## Background automation safety
 Some automation may be running in the background and must not be killed. Do not terminate `g-cli` or `LabVIEW` processes unless you have explicit confirmation it is safe.
@@ -393,7 +228,6 @@ pwsh -NoProfile -File .\Test\Pester\Run-Pester.ps1 `
 ```
 
 Notes:
-- Dev-mode tests toggle LabVIEW dev mode and require `RUN_DEV_MODE_TESTS`.
 - If LabVIEW is not installed for a bitness, tests will skip that bitness.
 
 ## Troubleshooting

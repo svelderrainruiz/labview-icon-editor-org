@@ -12,21 +12,13 @@ $ErrorActionPreference = 'Stop'
 $repoRootPath = (Resolve-Path -Path $RepoRoot -ErrorAction Stop).Path
 
 $allTargetFiles = @(
-    '.github/workflows/ci.yml',
-    '.github/workflows/labview-parity.yml',
-    '.github/workflows/development-mode-toggle.yml',
-    'Tooling/container-parity/runlabview-windows.ps1',
-    'Tooling/container-parity/runlabview-linux.sh'
+    '.github/workflows/ci.yml'
 )
 
 $targetFiles = switch ($Scope) {
     'ci-only' {
         @(
-            '.github/workflows/ci.yml',
-            '.github/workflows/labview-parity.yml',
-            '.github/workflows/development-mode-toggle.yml',
-            'Tooling/container-parity/runlabview-windows.ps1',
-            'Tooling/container-parity/runlabview-linux.sh'
+            '.github/workflows/ci.yml'
         )
     }
     default {
@@ -40,9 +32,7 @@ $ruleList = @(
         Pattern = 'Set_Development_Mode\.ps1|RevertDevelopmentMode\.ps1'
         Message = 'Automation workflows must not invoke dev-mode toggle scripts.'
         Files   = @(
-            '.github/workflows/ci.yml',
-            '.github/workflows/labview-parity.yml',
-            '.github/workflows/development-mode-toggle.yml'
+            '.github/workflows/ci.yml'
         )
     },
     [pscustomobject]@{
@@ -50,8 +40,7 @@ $ruleList = @(
         Pattern = 'revert_dev_mode'
         Message = 'CI workflows must not pass revert_dev_mode teardown inputs.'
         Files   = @(
-            '.github/workflows/ci.yml',
-            '.github/workflows/labview-parity.yml'
+            '.github/workflows/ci.yml'
         )
     },
     [pscustomobject]@{
@@ -60,33 +49,6 @@ $ruleList = @(
         Message = 'ci.yml must not include the devmode-no-labview-smoke job or dependencies.'
         Files   = @(
             '.github/workflows/ci.yml'
-        )
-    },
-    [pscustomobject]@{
-        Type    = 'workflow-devmode-linux-coupling'
-        Pattern = 'devmode-linux\.sh'
-        Message = 'Container parity workflows must not call devmode-linux.sh.'
-        Files   = @(
-            '.github/workflows/ci.yml',
-            '.github/workflows/labview-parity.yml'
-        )
-    },
-    [pscustomobject]@{
-        Type    = 'container-selector-plumbing'
-        Pattern = 'Run Icon Editor from Source Selector\.vi|Invoke-LabVIEWCliSelectorMode|Get-LabVIEWCliSelectorPortAttemptList|SELECTOR_VI_PATH|resolve_selector_port|run_selector_mode'
-        Message = 'Container parity scripts must not include selector mode set/unset plumbing.'
-        Files   = @(
-            'Tooling/container-parity/runlabview-windows.ps1',
-            'Tooling/container-parity/runlabview-linux.sh'
-        )
-    },
-    [pscustomobject]@{
-        Type    = 'container-devmode-plumbing'
-        Pattern = 'CONTAINER_PARITY_ENABLE_DEVMODE|Set-DevelopmentMode-NoLabVIEW\.ps1|Revert-DevelopmentMode-NoLabVIEW\.ps1|DEVMODE_SCRIPT'
-        Message = 'Container parity scripts must not include CI dev-mode toggle plumbing.'
-        Files   = @(
-            'Tooling/container-parity/runlabview-windows.ps1',
-            'Tooling/container-parity/runlabview-linux.sh'
         )
     }
 )

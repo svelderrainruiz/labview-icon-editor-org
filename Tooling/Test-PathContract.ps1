@@ -37,13 +37,8 @@ function Get-LvieRelativePath {
 $repoRootPath = (Resolve-Path -Path $RepoRoot -ErrorAction Stop).Path
 $allowedLiteralPathSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 @(
-    '.github/workflows/labview-parity.yml',
     '.github/workflows/ci.yml',
-    'Tooling/container-parity/path-contract.sh',
-    'Tooling/container-parity/runlabview-linux.sh',
-    'Tooling/container-parity/runlabview-windows.ps1',
-    'Tooling/container-parity/devmode-linux.sh',
-    'Tooling/container-parity/build-vip-linux.sh',
+    '.github/workflows/runner-cli-reusable.yml',
     'Tooling/support/PathContract.ps1',
     'docs/ci/path-root-contract.md'
 ) | ForEach-Object {
@@ -52,7 +47,6 @@ $allowedLiteralPathSet = [System.Collections.Generic.HashSet[string]]::new([Syst
 
 $scanRoots = @(
     '.github/workflows',
-    'Tooling/container-parity',
     'Tooling/support',
     'docs/ci'
 )
@@ -98,12 +92,7 @@ foreach ($file in $candidateFiles) {
     }
 }
 
-$contractScriptList = @(
-    'Tooling/container-parity/runlabview-linux.sh',
-    'Tooling/container-parity/devmode-linux.sh',
-    'Tooling/container-parity/build-vip-linux.sh',
-    'Tooling/container-parity/runlabview-windows.ps1'
-)
+$contractScriptList = @()
 foreach ($relativePath in $contractScriptList) {
     $fullPath = Join-Path -Path $repoRootPath -ChildPath $relativePath
     if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) {

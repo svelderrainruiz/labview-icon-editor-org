@@ -11,21 +11,7 @@ $repoRootPath = (Resolve-Path -Path $RepoRoot -ErrorAction Stop).Path
 
 $coreWorkflowFiles = @(
     '.github/workflows/ci.yml',
-    '.github/workflows/labview-parity.yml',
-    '.github/workflows/development-mode-toggle.yml',
-    '.github/workflows/runner-cli.yml',
-    '.github/workflows/runner-audit.yml'
-)
-
-$manualOnlyWorkflowFiles = @(
-    '.github/workflows/stale-issues.yml',
-    '.github/workflows/labels-sync.yml',
-    '.github/workflows/label-metadata-gate.yml',
-    '.github/workflows/label-metadata-audit.yml',
-    '.github/workflows/label-metadata-normalize.yml',
-    '.github/workflows/repo-agnostic-issue-routing.yml',
-    '.github/workflows/ci-debt-train.yml',
-    '.github/workflows/ci-debt-policy-gate.yml'
+    '.github/workflows/runner-cli-reusable.yml'
 )
 
 $pipelineContractFiles = @(
@@ -254,7 +240,7 @@ foreach ($relativePathRaw in $coreWorkflowFiles) {
     }
 }
 
-foreach ($relativePathRaw in ($pipelineContractFiles + '.github/workflows/development-mode-toggle.yml' + $manualOnlyWorkflowFiles)) {
+foreach ($relativePathRaw in $pipelineContractFiles) {
     $relativePath = $relativePathRaw -replace '\\', '/'
     $fullPath = Resolve-RepoFilePath -RepoRootPath $repoRootPath -RelativePath $relativePath
     if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) {
@@ -288,32 +274,7 @@ foreach ($relativePathRaw in ($pipelineContractFiles + '.github/workflows/develo
         }
     }
 
-    $events = @(Get-WorkflowEventName -Lines $lineItems)
-    if ($relativePath -eq '.github/workflows/development-mode-toggle.yml') {
-        $allowedEvents = @('workflow_dispatch', 'workflow_call')
-        $unexpectedEvents = @($events | Where-Object { $allowedEvents -notcontains $_ })
-        if (($events -notcontains 'workflow_dispatch') -or $unexpectedEvents.Count -gt 0) {
-            $violationList.Add([pscustomobject]@{
-                    Type    = 'development-mode-toggle-not-manual'
-                    File    = $relativePath
-                    Line    = 0
-                    Pattern = 'workflow_dispatch|workflow_call'
-                    Message = 'development-mode-toggle workflow must use explicit manual triggers only (workflow_dispatch, optional workflow_call).'
-                }) | Out-Null
-        }
-    }
-
-    if ($manualOnlyWorkflowFiles -contains $relativePath) {
-        if ($events.Count -ne 1 -or $events[0] -ne 'workflow_dispatch') {
-            $violationList.Add([pscustomobject]@{
-                    Type    = 'workflow-not-manual-only'
-                    File    = $relativePath
-                    Line    = 0
-                    Pattern = 'on: workflow_dispatch'
-                    Message = 'Collaboration-heavy workflow must be manual-only.'
-                }) | Out-Null
-        }
-    }
+    [void](Get-WorkflowEventName -Lines $lineItems)
 }
 
 $ciWorkflowPath = Resolve-RepoFilePath -RepoRootPath $repoRootPath -RelativePath '.github/workflows/ci.yml'

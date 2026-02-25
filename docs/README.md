@@ -3,20 +3,16 @@
 This directory collects guides and references for working with the LabVIEW Icon Editor.
 
 ## General Guides
-
-- [Manual Setup Instructions](manual-instructions.md)
-- [Automated Setup Instructions](automated-setup.md)
-- [PowerShell Dependency Scripts](powershell-dependency-scripts.md)
 - [CI Workflows Overview](ci-workflows.md)
-  - Canonical source for release/publication policy and CI behavior contracts.
+  - Canonical source for CI behavior and release/publication policy.
 - [LLM Operator Runbook](ci/llm-operator-runbook.md)
-  - Deterministic command-first workflow for `validate`, `integrate`, and `release` modes.
+  - Deterministic command-first workflow for validate/integrate/release modes.
 - [VI Package Pre-Release Requirements](vip-prerelease-requirements.md)
   - Normative contract for `develop` prerelease publication behavior and workflow interfaces.
   - Acceptance matrix: [vip-prerelease-requirements-v1-acceptance.md](vip-prerelease-requirements-v1-acceptance.md)
   - Trace matrix: [vip-prerelease-requirements-v0-to-v1-trace.md](vip-prerelease-requirements-v0-to-v1-trace.md)
 - [Runner CLI Requirements](runner-cli-requirements.md)
-  - `runner-cli.yml` consolidates runner-cli build/test/smoke and Docker validation (see CI Workflows Overview).
+  - Runner CLI artifacts are built inside `ci.yml` via `runner-cli-reusable.yml`.
 
 ## CI and Advanced Topics
 
@@ -24,7 +20,6 @@ This directory collects guides and references for working with the LabVIEW Icon 
 - [Troubleshooting & FAQ](ci/troubleshooting-faq.md)
 - [Composite Actions](ci/actions/README.md)
   - [Build VI Package](ci/actions/build-vi-package.md)
-  - [Development Mode Toggle](ci/actions/development-mode-toggle.md)
   - [Injecting Repo/Org to VI Package](ci/actions/injecting-repo-org-to-vi-package.md)
   - [Maintainer's Guide](ci/actions/maintainers-guide.md)
   - [Runner Setup Guide](ci/actions/runner-setup-guide.md)
@@ -32,6 +27,5 @@ This directory collects guides and references for working with the LabVIEW Icon 
 
 ## Archived/Historical CI References
 
-- [PowerShell CLI GitHub Action Instructions](powershell-cli-github-action-instructions.md)
 - [Multichannel Release Workflow](ci/actions/multichannel-release-workflow.md)
 - Not normative. Source of truth is [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) and [CI Workflows Overview](ci-workflows.md).

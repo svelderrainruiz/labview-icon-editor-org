@@ -1,3 +1,0 @@
-<testsuite name="suite">
-  <testcase name="passes" classname="MySuite" status="Passed" time="0.1" assertions="2" />
-</testsuite>

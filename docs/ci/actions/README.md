@@ -1,34 +1,17 @@
 # Composite GitHub Actions
 
-This repository defines several reusable [composite actions](https://docs.github.com/actions/creating-actions/creating-a-composite-action) in [`.github/actions`](../../../.github/actions). These actions wrap common LabVIEW build and test tasks and can be called from workflows in this or other repositories. Workflows such as [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml) rely on the [`build-project-spec`](../../../.github/actions/build-project-spec) and [`build-vi-package`](../../../.github/actions/build-vi-package) actions for their build steps.
+This repository keeps a minimal action surface aligned to `ci.yml`.
 
-| Action | Description |
-|---|---|
-| [apply-vipc](../../../.github/actions/apply-vipc) | Installs runner dependencies for a given LabVIEW version and bitness (defaults to `.lvversion` when omitted). |
-| [build-project-spec](../../../.github/actions/build-project-spec) | Builds a LabVIEW project specification (packed library or source distribution) via LabVIEWCLI. |
-| [build-lvlibp](../../../.github/actions/build-lvlibp) | Compatibility wrapper for packed-library builds. |
-| [build-vi-package](../../../.github/actions/build-vi-package) | Updates a VIPB file and builds the VI package. |
-| [close-labview](../../../.github/actions/close-labview) | Gracefully shuts down a LabVIEW instance after build steps to free runner resources. |
-| [compute-version](../../../.github/actions/compute-version) | Determines the semantic version from commit history and labels. |
-| [generate-release-notes](../../../.github/actions/generate-release-notes) | Generates a `release_notes.md` summarizing recent commits for use in changelogs or release drafts. |
-| [missing-in-project](../../../.github/actions/missing-in-project) | Checks a project for missing files using `MissingInProjectCLI.vi`. |
-| [modify-vipb-display-info](../../../.github/actions/modify-vipb-display-info) | Updates display information in a VIPB file. |
-| [prepare-labview-source](../../../.github/actions/prepare-labview-source) | Prepares LabVIEW sources for builds. |
-| [pylavi-validate](../../../.github/actions/pylavi-validate) | Runs pylavi `vi_validate` with `.lvversion`-synced LabVIEW version (report-only or strict), with optional baseline/delta gating. |
-| [rename-file](../../../.github/actions/rename-file) | Renames a file on disk. |
-| [restore-setup-lv-source](../../../.github/actions/restore-setup-lv-source) | Reverts prepared sources back to their packaged state. |
-| [revert-development-mode](../../../.github/actions/revert-development-mode) | Restores the repository after development mode. |
-| [run-unit-tests](../../../.github/actions/run-unit-tests) | Parses an existing `UnitTestReport.xml` produced by direct `g-cli lunit` execution. |
-| [set-development-mode](../../../.github/actions/set-development-mode) | Configures the repository for development mode. |
+## Actions used by CI
 
-Each action directory includes a `README.md` and `action.yml` with full usage details.
+- `pylavi-validate`
+- `lvie-job-setup`
+- `lvie-job-teardown`
+- `runner-bootstrap`
+- `compute-version`
+- `close-labview`
+- `rename-file`
+- `generate-release-notes`
+- `modify-vipb-display-info`
 
-> [!NOTE]
-> Several actions now prefer `runner-cli` subcommands when available (for example, `pylavi-validate`, `missing-in-project`, and `.lvversion` version-gate usage in workflows). They fall back to PowerShell scripts if `runner-cli` is unavailable, so behavior remains backward-compatible during the migration. Set `LVIE_REQUIRE_RUNNER_CLI=1` to make runner-cli mandatory.
-
-> [!NOTE]
-> `lvie-job-setup` supports a hybrid worktree-root mode via input `worktree_root_mode`:
-> - `contract` (default): use runner-contract `LVIE_WORKTREE_ROOT`.
-> - `runner_temp`: use `$env:RUNNER_TEMP\lvie\w` for job worktrees.
->
-> In both modes, runner-contract roots for artifacts/locks/logs remain unchanged. The action exports `LVIE_WORKTREE_ROOT_SOURCE` (`explicit`, `runner_temp`, `contract`) for diagnostics.
+Actions not used by `ci.yml` are treated as non-authoritative and may be removed.

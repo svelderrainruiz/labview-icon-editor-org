@@ -3310,9 +3310,52 @@ jobs:
       - docs-lint
       - powershell-lint
       - pipeline-contract
+      - governance-contract
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate canonical required check context
+        shell: pwsh
+        run: |
+          $docsLintResult = '${{ needs.docs-lint.result }}'
+          $lintResult = '${{ needs.powershell-lint.result }}'
+          $contractResult = '${{ needs.pipeline-contract.result }}'
+          $governanceResult = '${{ needs.governance-contract.result }}'
+
+          Write-Host ("Documentation Lint result: {0}" -f $docsLintResult)
+          Write-Host ("PowerShell Lint result: {0}" -f $lintResult)
+          Write-Host ("Pipeline Contract result: {0}" -f $contractResult)
+          Write-Host ("Governance Contract result: {0}" -f $governanceResult)
+
+          $failing = @()
+          if ($docsLintResult -ne 'success') {
+            $failing += "docs-lint:$docsLintResult"
+          }
+          if ($lintResult -ne 'success') {
+            $failing += "powershell-lint:$lintResult"
+          }
+          if ($contractResult -ne 'success') {
+            $failing += "pipeline-contract:$contractResult"
+          }
+          if ($governanceResult -ne 'success') {
+            $failing += "governance-contract:$governanceResult"
+          }
+
+          if ($failing.Count -gt 0) {
+            throw ("CI required context failed because prerequisite checks were not successful: {0}" -f ($failing -join ', '))
+          }
+
+          Write-Host 'CI required context passed.'
+
+  governance-contract:
+    name: Governance Contract
+    if: always()
+    needs:
+      - docs-lint
+      - powershell-lint
+      - pipeline-contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate governance contract
         shell: pwsh
         run: |
           $docsLintResult = '${{ needs.docs-lint.result }}'
@@ -3335,8 +3378,8 @@ jobs:
           }
 
           if ($failing.Count -gt 0) {
-            throw ("CI required context failed because prerequisite checks were not successful: {0}" -f ($failing -join ', '))
+            throw ("Governance contract failed because prerequisite checks were not successful: {0}" -f ($failing -join ', '))
           }
 
-          Write-Host 'CI required context passed.'
+          Write-Host 'Governance contract passed.'
 

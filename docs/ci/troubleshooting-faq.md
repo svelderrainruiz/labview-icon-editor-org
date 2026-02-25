@@ -11,7 +11,7 @@ This document provides a collection of common **troubleshooting** scenarios (wit
    2. [No. 2: No `.vip` Artifact Found](#no-2-no-vip-artifact-found)
    3. [No. 3: Version Label Not Recognized](#no-3-version-label-not-recognized)
    4. [No. 4: Build Number Not Updating](#no-4-build-number-not-updating)
-   5. [No. 5: Dev Mode Still Enabled After Build](#no-5-dev-mode-still-enabled-after-build)
+   5. [No. 5: Dev Mode Automation Removed](#no-5-dev-mode-automation-removed)
    6. [No. 6: Release Not Created](#no-6-release-not-created)
    7. [No. 7: Branch Protection Blocks Merge](#no-7-branch-protection-blocks-merge)
    8. [No. 8: Incorrect Pre-Release Suffix (Legacy Alpha/Beta/RC Channels)](#no-8-incorrect-pre-release-suffix-legacy-alphabetarc-channels)
@@ -20,7 +20,7 @@ This document provides a collection of common **troubleshooting** scenarios (wit
    11. [No. 11: Company/Author Fields Not Populating](#no-11-companyauthor-fields-not-populating)
    12. [No. 12: JSON Fields Overwritten Incorrectly](#no-12-json-fields-overwritten-incorrectly)
    13. [No. 13: Repository Forks Not Displaying Correct Metadata](#no-13-repository-forks-not-displaying-correct-metadata)
-   14. [No. 14: Dev Mode Failure Missing Paths](#no-14-dev-mode-failure-missing-paths)
+   14. [No. 14: Dev Mode Missing Paths (Not Supported)](#no-14-dev-mode-missing-paths-not-supported)
    15. [No. 15: Verify IE Paths Check Fails (Local/Manual Runs)](#no-15-verify-ie-paths-check-fails-localmanual-runs)
    16. [No. 16: Expected Job Is Skipped (Profile-Based Behavior)](#no-16-expected-job-is-skipped-profile-based-behavior)
    17. [No. 17: PR Merge Blocked Despite Green Required Checks](#no-17-pr-merge-blocked-despite-green-required-checks)
@@ -34,7 +34,7 @@ This document provides a collection of common **troubleshooting** scenarios (wit
    5. [Q5: Do I Need To Merge Hotfixes Into `develop`?](#q5-do-i-need-to-merge-hotfixes-into-develop)
    6. [Q6: What About Draft Releases?](#q6-what-about-draft-releases)
    7. [Q7: Can I Use This Workflow Without Gitflow?](#q7-can-i-use-this-workflow-without-gitflow)
-   8. [Q8: Why Is My Dev Mode Toggle Not Working Locally?](#q8-why-is-my-dev-mode-toggle-not-working-locally)
+   8. [Q8: Why Is Dev Mode Toggle Not Working Locally?](#q8-why-is-dev-mode-toggle-not-working-locally)
    9. [Q9: Can I Use a Different LabVIEW Version?](#q9-can-i-use-a-different-labview-version)
    10. [Q10: How Do I Pass Repository Name and Organization?](#q10-how-do-i-pass-repository-name-and-organization)
    11. [Q11: Can I Omit the Company/Author Fields in My JSON?](#q11-can-i-omit-the-companyauthor-fields-in-my-json)
@@ -112,18 +112,16 @@ Below are 17 possible issues you might encounter, along with suggested steps to 
 
 ---
 
-### No. 5: Dev Mode Still Enabled After Build
+### No. 5: Dev Mode Automation Removed
 
 **Symptoms**:
-- You run a build, but the environment remains in “development mode,” causing odd behavior when installing `.vip`.
+- You expect a CI workflow to toggle dev mode.
 
-**Possible Causes**:
-- You forgot to run the “disable” step of the Development Mode Toggle.  
-- A manual/local script re-applied `Set_Development_Mode.ps1`.
+**Explanation**:
+Dev mode automation is not part of the CI-only workflow surface. There is no supported dev mode toggle workflow in this repository.
 
 **Solution**:
-1. Manually run the “Development Mode Toggle” workflow with `mode=disable`.  
-2. Confirm your pipeline sequence: typically, dev mode is enabled for debugging only, then disabled prior to final builds.
+Use CI-only flows (`ci.yml`) and avoid dev-mode changes on shared runners.
 
 ---
 
@@ -140,7 +138,6 @@ Below are 17 possible issues you might encounter, along with suggested steps to 
 1. Identify the exact SHA you want to publish.
 2. Confirm the run is an eligible publish path:
    - Auto path: `push` to `develop` where `github.sha` is the merged PR merge commit.
-   - Auto relay workflow: `Prerelease Auto Dispatch` should run for the same source SHA and dispatch strict publish intent.
    - Manual backfill path: `workflow_dispatch` with `publish_prerelease=true`, `expected_sha=<sha>`, and `strict_sha=true`.
 3. For `release-priority` (`workflow_dispatch` + `force_gcli_lunit=true`), confirm there is a successful `full` profile run on `develop` in the previous 24 hours.
 4. Inspect the `publish-gate` and `publish-prerelease` job logs for explicit failure/skip reason output.
@@ -148,9 +145,10 @@ Below are 17 possible issues you might encounter, along with suggested steps to 
 
 Deterministic backfill command:
 ```powershell
-pwsh -NoProfile -File .\Tooling\Invoke-DeterministicPrereleasePublish.ps1 `
-  -Sha <merged-develop-merge-sha> `
-  -Wait
+gh workflow run "CI Pipeline" --ref <ref> `
+  -f publish_prerelease=true `
+  -f expected_sha=<merged-develop-merge-sha> `
+  -f strict_sha=true
 ```
 
 ---
@@ -273,21 +271,20 @@ pwsh -NoProfile -File .\Tooling\Invoke-DeterministicPrereleasePublish.ps1 `
 
 ---
 
-### No. 14: Dev Mode Failure Missing Paths
+### No. 14: Dev Mode Missing Paths (Not Supported)
 
 **Symptoms**:
-- The workflow fails with error `-593450` (enable) or `-593451` (disable), and the VI error source string prints a comma-separated list of missing paths.
+- Errors referencing dev-mode enable/disable or missing dev-mode paths.
 
-**Possible Causes**:
-- One or more expected folders or files are missing in the Icon Editor source or the LabVIEW Icon API setup.
+**Explanation**:
+Dev mode automation is not supported in this CI-only workflow surface. These errors indicate legacy tooling or local scripts still being used.
 
 **Solution**:
-1. Read the comma-separated missing paths from the VI error source string.
-2. Restore the missing paths from a known-good install or repo checkout, then re-run the Development Mode Toggle.
+Use CI-only flows (`ci.yml`) and avoid dev-mode automation on shared runners.
 
 ---
 
-### No. 15: Verify IE Paths Check Fails (Local/Manual Runs)
+### No. 15: Verify IE Paths Check Fails
 
 **Symptoms**:
 - A local parity/manual check reports `VerifyIEPaths` errors.
@@ -295,12 +292,10 @@ pwsh -NoProfile -File .\Tooling\Invoke-DeterministicPrereleasePublish.ps1 `
 
 **Possible Causes**:
 - One or more LabVIEW Icon API files are missing in the required `.lvversion`-compatible LabVIEW install.
-- The runner is in development mode (missing `LabVIEW Icon API` or `lv_icon.lvlibp`).
 
 **Solution**:
-1. Run `Tooling/Invoke-MissingIEFilesFromLVInstall.ps1` (or local CI parity) for the affected bitness and inspect the generated `missing_IE_paths.txt`.
-2. Check the comma-separated list of missing paths.
-3. Restore missing files (or revert dev mode), then rerun the local/manual check.
+1. Verify the LabVIEW install for the `.lvversion` target and reapply dependencies if needed.
+2. Re-run `ci.yml` and inspect the job logs for missing file diagnostics.
 
 ---
 
@@ -370,7 +365,7 @@ By default, the workflow calculates the build number with `git rev-list --count 
 ### Q2: How Do I Create a Release?
 
 **Answer**:
-Repository policy auto-publishes on eligible merged-PR merge commits to `develop`, with relay dispatch handled by `.github/workflows/prerelease-auto-dispatch.yml`. Use manual backfill only when needed via `Tooling/Invoke-DeterministicPrereleasePublish.ps1`, then review `prerelease-publish-status` when troubleshooting.
+Repository policy auto-publishes on eligible merged-PR merge commits to `develop` directly from `ci.yml`. Use manual backfill only when needed via `workflow_dispatch` on `ci.yml`, then review `prerelease-publish-status` when troubleshooting.
 
 ---
 
@@ -409,10 +404,10 @@ Technically yes, if you don’t rely on alpha/beta/rc branch naming. But the wor
 
 ---
 
-### Q8: Why Is My Dev Mode Toggle Not Working Locally?
+### Q8: Why Is Dev Mode Toggle Not Working Locally?
 
 **Answer**:  
-The Dev Mode Toggle scripts rely on a self-hosted runner context. If you’re trying to run them directly on your machine outside GitHub Actions, you might need to adapt the PowerShell scripts or replicate the environment variables. Check logs to see if your system path matches what the scripts expect.
+Dev mode automation is not supported in this CI-only workflow surface. Use CI-only flows (`ci.yml`) and avoid dev-mode changes on shared runners.
 
 ---
 
